@@ -1,2 +1,1 @@
-# workflows
-Reusable workflows for GitHub Actions
+# Reusable workflows for GitHub Actions

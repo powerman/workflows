@@ -1,0 +1,21 @@
+[settings]
+experimental = true # Required to use lockfile.
+lockfile = true     # DO NOT FORGET TO `touch mise.lock`!
+
+
+[tools]
+#--- Test & Lint
+# Static checker for GitHub Actions workflow files.
+actionlint = 'latest'
+# Run your GitHub Actions locally.
+act = 'latest'
+
+
+[tasks.test]
+alias = 'default'
+description = 'Run all linters and tests'
+depends = ['lint:*', 'test:*']
+
+[tasks.'lint:workflows']
+description = 'Lint GitHub Action workflows'
+run = 'actionlint'
