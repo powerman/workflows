@@ -1,0 +1,28 @@
+#!/bin/bash
+set -e
+
+TEST_REPO=$("$(dirname "$0")"/test_repo)
+PR_BRANCH=release-pr # TODO: Make it configurable.
+
+unset PAGER
+
+echo "Cleaning up release PRs and branches..."
+for n in $(gh pr list --repo "$TEST_REPO" --head "$PR_BRANCH" --json number --jq '.[].number'); do
+    echo "Closing PR #${n}"
+    gh pr close --repo "$TEST_REPO" "$n" --delete-branch 2>/dev/null || true
+done
+
+echo "Removing any remaining $PR_BRANCH branch..."
+gh api repos/"$TEST_REPO"/git/refs/heads/"$PR_BRANCH" -X DELETE &>/dev/null || true
+
+echo "Cleaning up releases and tags..."
+for n in $(gh release list --repo "$TEST_REPO" --json tagName --jq '.[].tagName'); do
+    echo "Deleting release ${n}"
+    gh release delete --repo "$TEST_REPO" "$n" --yes 2>/dev/null || true
+done
+
+echo "Cleaning up remaining git tags..."
+for n in $(gh api "repos/$TEST_REPO/tags" --jq '.[].name'); do
+    echo "Deleting tag ${n}"
+    git push --delete "git@github.com:${TEST_REPO}.git" "${n}" 2>/dev/null || true
+done

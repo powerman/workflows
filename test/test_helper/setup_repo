@@ -1,0 +1,33 @@
+#!/bin/bash
+set -e
+
+TEST_REPO=$("$(dirname "$0")"/test_repo)
+DEFAULT_BRANCH=main # TODO: Make it configurable.
+
+if gh repo create "$TEST_REPO" --private 2>/dev/null; then
+    gh api --method PUT repos/"$TEST_REPO"/actions/permissions/workflow \
+        --field can_approve_pull_request_reviews=true
+else
+    "$(dirname "$0")"/cleanup_repo
+fi
+
+# Use stable directory for manual testing
+TEST_REPO_DIR="$(git rev-parse --show-toplevel)/.test-repo"
+rm -rf "$TEST_REPO_DIR"
+mkdir -p "$TEST_REPO_DIR"
+cd "$TEST_REPO_DIR"
+
+git init 2>/dev/null
+git config --local commit.gpgsign false
+git config --local tag.gpgsign false
+git remote add origin "https://github.com/${TEST_REPO}.git"
+
+echo "/.github" >.gitignore
+git add .gitignore
+ln -s ../.github .
+
+git commit -m 'Initial commit'
+git branch -M "$DEFAULT_BRANCH"
+git push --quiet -u origin --force "$DEFAULT_BRANCH"
+
+gh repo edit "$TEST_REPO" --default-branch "$DEFAULT_BRANCH"

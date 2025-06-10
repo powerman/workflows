@@ -1,0 +1,126 @@
+name: 'Release PR - Set Version'
+
+on:
+  workflow_call:
+    inputs:
+      commit_prefix:
+        description: 'Commit message prefix'
+        required: true
+        type: string
+      pr_branch:
+        description: 'Technical branch for release PRs'
+        required: true
+        type: string
+      target_branch:
+        description: 'Target branch for releases'
+        required: true
+        type: string
+      version_cmd:
+        description: 'Shell command to update additional files using $RELEASE_PR_VERSION'
+        required: false
+        type: string
+    outputs:
+      result:
+        description: 'Result: "set-version" or nothing'
+        value: ${{ jobs.main.outputs.result }}
+      version:
+        description: 'Next version'
+        value: ${{ jobs.main.outputs.version }}
+      changelog:
+        description: 'Next version changelog'
+        value: ${{ jobs.main.outputs.changelog }}
+
+permissions:
+  contents: write # To update release_pr branch.
+  pull-requests: write # To normalize PR title and update PR from release_pr branch.
+
+jobs:
+  main:
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    outputs:
+      result: ${{ steps.set-version.outputs.result }}
+      version: ${{ steps.set-version.outputs.version }}
+      changelog: ${{ steps.set-version.outputs.changelog }}
+    env:
+      COMMIT_PREFIX: ${{ inputs.commit_prefix }}
+      PR_BRANCH: ${{ inputs.pr_branch }}
+      TARGET_BRANCH: ${{ inputs.target_branch }}
+      VERSION_CMD: ${{ inputs.version_cmd }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # For git-cliff.
+          ref: ${{ env.PR_BRANCH }}
+
+      - name: Enable `git push` when `act` is run without `--no-skip-checkout`
+        if: ${{ env.ACT }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+      - uses: jdx/mise-action@v2
+        with:
+          install_args: 'gh git-cliff'
+        env:
+          GITHUB_TOKEN: ${{ github.token }} # Increase GitHub API rate limits.
+      - run: mise use -g gh git-cliff
+
+      - uses: fregante/setup-git-user@v2
+
+      - name: Update release-pr branch with new version
+        id: set-version
+        shell: bash
+        env:
+          GITHUB_REPO: ${{ github.repository }} # Used by git-cliff.
+          GITHUB_TOKEN: ${{ github.token }} # Used by gh.
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_NUMBER: ${{ github.event.number }}
+        run: |
+          # A manually edited title may differ a bit from auto-generated commit message
+          # (extra spaces, version without "v" prefix).
+          VERSION=$(echo "$PR_TITLE" | grep -oP "^\Q${COMMIT_PREFIX}\E\s+\Kv?[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?")
+          test -n "$VERSION" || {
+            echo "::error::Failed to extract version from PR title: '$PR_TITLE'"
+            echo "::notice::Expected format: '$COMMIT_PREFIX v1.2.3' (version may be without 'v' prefix)"
+            exit 1
+          }
+          VERSION="v${VERSION#v}"
+          COMMIT_MSG="$COMMIT_PREFIX $VERSION"
+          existing_commit_msg=$(git log -1 --pretty=format:"%s")
+
+          # Update release-pr branch and PR if version was manually changed.
+          if [ "$existing_commit_msg" != "$COMMIT_MSG" ]; then
+            # Run custom version command if provided
+            if [ -n "$VERSION_CMD" ]; then
+              echo "::group::Running custom version command"
+              RELEASE_PR_VERSION="$VERSION" \
+                bash -e -o pipefail -c "$VERSION_CMD"
+              echo "::endgroup::"
+            fi
+
+            git-cliff --tag "$VERSION" -o CHANGELOG.md
+            git add .
+
+            git commit --amend --allow-empty -m "$COMMIT_MSG"
+            git push origin "$PR_BRANCH" --force
+
+            CHANGELOG=$(git-cliff --tag "$VERSION" --unreleased --strip all | tail -n +3)
+            gh pr edit "$PR_NUMBER" --title "$COMMIT_MSG" --body "$CHANGELOG"
+            echo "::notice::Updated release-pr branch and PR #$PR_NUMBER with new version"
+          elif [ "$PR_TITLE" != "$COMMIT_MSG" ]; then
+            # Normalize PR title to simplify other workflows.
+            gh pr edit "$PR_NUMBER" --title "$COMMIT_MSG"
+            echo "::notice::Normalized title for release-pr PR #$PR_NUMBER"
+          else
+            echo "::notice::No changes needed for release-pr PR #$PR_NUMBER"
+            exit 0
+          fi
+
+          {
+            echo "result=set-version"
+            echo "version=$VERSION"
+            echo "changelog<<EOF"
+            echo "$CHANGELOG"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"

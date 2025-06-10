@@ -1,0 +1,148 @@
+name: 'Release PR - Prepare PR'
+
+on:
+  workflow_call:
+    inputs:
+      commit_prefix:
+        description: 'Commit message prefix'
+        required: true
+        type: string
+      pr_branch:
+        description: 'Technical branch for release PRs'
+        required: true
+        type: string
+      target_branch:
+        description: 'Target branch for releases'
+        required: true
+        type: string
+      version_cmd:
+        description: 'Shell command to update additional files using $RELEASE_PR_VERSION'
+        required: false
+        type: string
+    outputs:
+      result:
+        description: 'Result: "prepared-pr" or nothing'
+        value: ${{ jobs.main.outputs.result }}
+      version:
+        description: 'Next version'
+        value: ${{ jobs.main.outputs.version }}
+      changelog:
+        description: 'Next version changelog'
+        value: ${{ jobs.main.outputs.changelog }}
+
+permissions:
+  contents: write # To create/update release_pr branch.
+  pull-requests: write # To create/update PR from release_pr branch.
+
+jobs:
+  main:
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    outputs:
+      result: ${{ steps.vars.outputs.result }}
+      version: ${{ steps.vars.outputs.version }}
+      changelog: ${{ steps.vars.outputs.changelog }}
+    env:
+      COMMIT_PREFIX: ${{ inputs.commit_prefix }}
+      PR_BRANCH: ${{ inputs.pr_branch }}
+      TARGET_BRANCH: ${{ inputs.target_branch }}
+      VERSION_CMD: ${{ inputs.version_cmd }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # For git-cliff.
+
+      - name: Enable `git push` when `act` is run without `--no-skip-checkout`
+        if: ${{ env.ACT }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+      - uses: jdx/mise-action@v2
+        with:
+          install_args: 'gh git-cliff'
+        env:
+          GITHUB_TOKEN: ${{ github.token }} # Increase GitHub API rate limits.
+      - run: mise use -g gh git-cliff
+
+      - uses: fregante/setup-git-user@v2
+
+      - name: Determine version and generate changelog
+        shell: bash
+        env:
+          GITHUB_REPO: ${{ github.repository }} # Used by git-cliff.
+          GITHUB_TOKEN: ${{ github.token }} # Used by gh.
+        run: |
+          VERSION=$(git-cliff --bumped-version)
+
+          # Check if existing PR has a manually set version that should be preserved.
+          pr_title=$(gh pr list --state open --head "$PR_BRANCH" --json title --jq '.[0].title')
+          if [ -n "$pr_title" ]; then
+            pr_version=$(echo "$pr_title" | grep -oP "^\Q${COMMIT_PREFIX}\E\s+\Kv?[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?")
+            test -n "$pr_version" || {
+              echo "::error::Failed to extract version from PR title: '$pr_title'"
+              echo "::notice::Expected format: '$COMMIT_PREFIX v1.2.3' (version may be without 'v' prefix)"
+              exit 1
+            }
+            semver_ge() {
+              python3 -c 'import sys, packaging.version as v; exit(v.Version(sys.argv[1]) < v.Version(sys.argv[2]))' "$1" "$2"
+            }
+            if semver_ge "${pr_version}" "${VERSION}"; then
+              VERSION="v${pr_version#v}"
+            fi
+          fi
+
+          {
+            echo "VERSION=$VERSION"
+            echo "COMMIT_MSG=$COMMIT_PREFIX $VERSION"
+            echo "CHANGELOG<<EOF"
+            git-cliff --tag "$VERSION" --unreleased --strip all | tail -n +3
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+
+      - name: Create or update release-pr branch with CHANGELOG.md
+        shell: bash
+        env:
+          GITHUB_REPO: ${{ github.repository }} # Used by git-cliff.
+        run: |
+          git checkout -B "$PR_BRANCH"
+
+          # Run custom version command if provided
+          if [ -n "$VERSION_CMD" ]; then
+            echo "::group::Running custom version command"
+            RELEASE_PR_VERSION="$VERSION" \
+              bash -e -o pipefail -c "$VERSION_CMD"
+            echo "::endgroup::"
+          fi
+
+          git-cliff --tag "$VERSION" -o CHANGELOG.md
+          git add .
+
+          git commit --allow-empty -m "$COMMIT_MSG"
+          git push origin "$PR_BRANCH" --force
+
+      - name: Create or update release-pr pull request
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ github.token }} # Used by gh.
+        run: |
+          pr_number=$(gh pr list --state open --head "$PR_BRANCH" --json number --jq '.[0].number')
+          if [ -z "$pr_number" ]; then
+            gh pr create --head "$PR_BRANCH" --base "$TARGET_BRANCH" --title "$COMMIT_MSG" --body "$CHANGELOG"
+            echo "::notice::Created new release PR"
+          else
+            gh pr edit "$pr_number" --title "$COMMIT_MSG" --body "$CHANGELOG"
+            echo "::notice::Updated existing release PR #$pr_number"
+          fi
+
+      - name: Set output
+        shell: bash
+        id: vars
+        run: |
+          {
+            echo "result=prepared-pr"
+            echo "version=$VERSION"
+            echo "changelog<<EOF"
+            echo "$CHANGELOG"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"

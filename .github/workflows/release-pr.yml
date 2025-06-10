@@ -1,0 +1,204 @@
+name: 'Release PR'
+
+on:
+  workflow_call:
+    inputs:
+      commit_prefix:
+        description: 'Commit message prefix'
+        required: false
+        type: string
+        default: 'chore: release'
+      pr_branch:
+        description: 'Technical branch for release PRs'
+        required: false
+        type: string
+        default: release-pr
+      target_branch:
+        description: 'Target branch for releases'
+        required: false # Uses repo default branch by default.
+        type: string
+      version_cmd:
+        description: 'Shell command to update additional files using $RELEASE_PR_VERSION'
+        required: false
+        type: string
+    outputs:
+      commit_prefix:
+        description: 'Commit message prefix'
+        value: ${{ jobs.setup.outputs.commit_prefix }}
+      pr_branch:
+        description: 'Technical branch for release PRs'
+        value: ${{ jobs.setup.outputs.pr_branch }}
+      target_branch:
+        description: 'Target branch for releases'
+        value: ${{ jobs.setup.outputs.target_branch }}
+      result:
+        description: 'Result: "prepared-pr", "set-version", "released" or nothing'
+        value: ${{ jobs.prepare.outputs.result || jobs.set-version.outputs.result || jobs.release.outputs.result }}
+      version:
+        description: 'Next (prepared-pr, set-version) or current (released) version'
+        value: ${{ jobs.prepare.outputs.version || jobs.set-version.outputs.version || jobs.release.outputs.version }}
+      changelog:
+        description: 'Next (prepared-pr, set-version) or current (released) version changelog'
+        value: ${{ jobs.prepare.outputs.changelog || jobs.set-version.outputs.changelog || jobs.release.outputs.changelog }}
+
+concurrency:
+  group: release-pr
+
+permissions:
+  contents: read # To call GitHub repos API using `gh` (to check if repository is a fork).
+
+jobs:
+  setup:
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    outputs:
+      commit_prefix: ${{ steps.config.outputs.commit_prefix }}
+      pr_branch: ${{ steps.config.outputs.pr_branch }}
+      target_branch: ${{ steps.config.outputs.target_branch }}
+      action: ${{ steps.action.outputs.action }}
+    env:
+      COMMIT_PREFIX: ${{ inputs.commit_prefix }}
+      PR_BRANCH: ${{ inputs.pr_branch }}
+      TARGET_BRANCH: ${{ inputs.target_branch || github.event.repository.default_branch }}
+    steps:
+      - name: Release PR configuration
+        id: config
+        run: |
+          echo
+          echo "Release PR configuration:"
+          echo
+          echo "  commit_prefix = '$COMMIT_PREFIX'"
+          echo "  pr_branch     = '$PR_BRANCH'"
+          echo "  target_branch = '$TARGET_BRANCH'"
+          echo
+
+          {
+            echo "commit_prefix=$COMMIT_PREFIX"
+            echo "pr_branch=$PR_BRANCH"
+            echo "target_branch=$TARGET_BRANCH"
+          } >> "$GITHUB_OUTPUT"
+
+      - uses: jdx/mise-action@v2
+        with:
+          install_args: 'gh'
+        env:
+          GITHUB_TOKEN: ${{ github.token }} # Increase GitHub API rate limits.
+      - run: mise use -g gh
+
+      - name: Route event to suitable workflow
+        id: action
+        env:
+          # The owner and repository name.
+          # For example, octocat/Hello-World.
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          # The fully-formed ref of the branch or tag that triggered the workflow run.
+          # For workflows triggered by push, this is the branch or tag ref that was pushed.
+          # For workflows triggered by pull_request, the value of GITHUB_REF varies for a
+          # closed pull request depending on whether the pull request has been merged or not.
+          # If a pull request was closed but not merged, it will be
+          # refs/pull/PULL_REQUEST_NUMBER/merge.
+          # If a pull request was closed as a result of being merged, it will be the fully
+          # qualified ref of the branch it was merged into, for example /refs/heads/main.
+          GITHUB_REF: ${{ github.ref }}
+          # The base_ref or target branch of the pull request in a workflow run.
+          # This property is only available when the event that triggers a workflow run is
+          # either pull_request or pull_request_target.
+          GITHUB_BASE_REF: ${{ github.base_ref }}
+          # The head_ref of source branch of the pull request in a workflow run.
+          # This property is only available when the event that triggers a workflow run is
+          # either pull_request or pull_request_target.
+          GITHUB_HEAD_REF: ${{ github.head_ref }}
+          # The name of the event that triggered the workflow run.
+          EVENT_NAME: ${{ github.event_name }}
+          # The commit message.
+          EV_PUSH_HEAD_MESSAGE: ${{ github.event.head_commit.message }}
+          # Action type: opened, closed, edited, …
+          EV_PR_ACTION: ${{ github.event.action }}
+          # Object with changes to the PR title if the action was `edited`.
+          EV_PR_CHANGES_TITLE: ${{ github.event.changes.title }}
+          # The owner and repository name of PR source branch.
+          EV_PR_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
+        run: |
+          if [ "$EVENT_NAME" = "push" ]; then
+
+            if [ "$(gh api "repos/$GITHUB_REPOSITORY" --jq '.fork')" = "true" ]; then
+              echo "Skip $EVENT_NAME: no releases in repo forks"
+              exit 0
+            fi
+            if [ "$GITHUB_REF" != "refs/heads/$TARGET_BRANCH" ]; then
+              echo "Skip $EVENT_NAME: target branch is not $TARGET_BRANCH"
+              exit 0
+            fi
+            if echo "$EV_PUSH_HEAD_MESSAGE" | grep -qP "^\Q${COMMIT_PREFIX}\E\s"; then
+              pr_merge=true # Squash merge OR Rebase merge.
+            elif echo "$EV_PUSH_HEAD_MESSAGE" | grep -qP "^Merge pull request .* from \Q${PR_BRANCH}\E$"; then
+              pr_merge=true # Merge commit.
+            fi
+            if [ -n "$pr_merge" ]; then
+              ACTION=release
+            else
+              ACTION=prepare
+            fi
+
+          elif [ "$EVENT_NAME" = "pull_request" ]; then
+
+            if [ "$GITHUB_BASE_REF" != "$TARGET_BRANCH" ]; then
+              echo "Skip $EVENT_NAME: PR base branch is not $TARGET_BRANCH"
+              exit 0
+            fi
+            if [ "$GITHUB_HEAD_REF" != "$PR_BRANCH" ]; then
+              echo "Skip $EVENT_NAME: PR source branch is not $PR_BRANCH"
+              exit 0
+            fi
+            if [ "$EV_PR_HEAD_REPOSITORY" != "$GITHUB_REPOSITORY" ]; then
+              echo "Skip $EVENT_NAME: PR is from a repo fork"
+              exit 0
+            fi
+            if [ "$EV_PR_ACTION" != "edited" ]; then
+              echo "Skip $EVENT_NAME: PR was not edited"
+              exit 0
+            fi
+            if [ -z "$EV_PR_CHANGES_TITLE" ]; then
+              echo "Skip $EVENT_NAME: PR title was not changed"
+              exit 0
+            fi
+            ACTION=set-version
+
+          fi
+
+          echo "Handle $EVENT_NAME: $ACTION"
+
+          echo "action=$ACTION" >> "$GITHUB_OUTPUT"
+
+  prepare:
+    needs: [setup]
+    if: ${{ needs.setup.outputs.action == 'prepare' }}
+    uses: ./.github/workflows/release-pr-prepare.yml
+    with:
+      commit_prefix: ${{ needs.setup.outputs.commit_prefix }}
+      pr_branch: ${{ needs.setup.outputs.pr_branch }}
+      target_branch: ${{ needs.setup.outputs.target_branch }}
+      version_cmd: ${{ inputs.version_cmd }}
+
+  set-version:
+    needs: [setup]
+    if: ${{ needs.setup.outputs.action == 'set-version' }}
+    uses: ./.github/workflows/release-pr-set-version.yml
+    with:
+      commit_prefix: ${{ needs.setup.outputs.commit_prefix }}
+      pr_branch: ${{ needs.setup.outputs.pr_branch }}
+      target_branch: ${{ needs.setup.outputs.target_branch }}
+      version_cmd: ${{ inputs.version_cmd }}
+
+  release:
+    needs: [setup]
+    if: ${{ needs.setup.outputs.action == 'release' }}
+    permissions:
+      contents: write # To create a release tag.
+      pull-requests: write # To create release-pr PR in case of race condition.
+    uses: ./.github/workflows/release-pr-release.yml
+    with:
+      commit_prefix: ${{ needs.setup.outputs.commit_prefix }}
+      pr_branch: ${{ needs.setup.outputs.pr_branch }}
+      target_branch: ${{ needs.setup.outputs.target_branch }}
+      version_cmd: ${{ inputs.version_cmd }}
