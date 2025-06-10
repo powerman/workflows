@@ -1,0 +1,21 @@
+#!/bin/bash
+set -e
+
+TEST_REPO=$("$(dirname "$0")"/test_repo)
+
+unset PAGER
+
+echo "Release PR:"
+gh pr list --repo "$TEST_REPO" --state open --head release-pr
+echo
+
+echo "Latest releases:"
+gh release list --repo "$TEST_REPO" --limit 3
+echo
+
+echo "Latest tags:"
+gh api "repos/$TEST_REPO/tags" --jq '.[0:3][] | .name'
+echo
+
+echo "Latest commits on default branch:"
+gh api "repos/$TEST_REPO/commits" --jq '.[0:10][] | .commit.message | split("\n")[0]'

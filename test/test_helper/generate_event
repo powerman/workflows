@@ -1,0 +1,737 @@
+#!/bin/bash
+set -e
+
+# GitHub Event Generator
+# Generates GitHub webhook events based on real git repository data
+
+usage() {
+    cat <<EOF
+Usage: $0 <event_type> [options]
+
+Event Types:
+    push                Generate push event
+    pull_request        Generate pull request event
+
+Options:
+    --branch BRANCH     Target branch (default: current branch)
+    --action ACTION     PR action: opened, closed, edited, etc. (for pull_request events)
+    --pr-branch BRANCH  PR source branch (default: release-pr)
+    --pr-number NUM     PR number (for pull_request events)
+    --pr-title TITLE    PR title (for pull_request events)
+    --help              Show this help
+
+Examples:
+    $0 push --branch main
+    $0 push --branch feature/new-feature
+    $0 pull_request --action edited --pr-number 123 --pr-title "chore: release v1.2.3"
+EOF
+}
+
+# Default values
+EVENT_TYPE=""
+BRANCH=""
+PR_ACTION="opened"
+PR_BRANCH="release-pr"
+PR_NUMBER=""
+PR_TITLE=""
+
+# Parse arguments
+while [[ $# -gt 0 ]]; do
+    case $1 in
+    push | pull_request)
+        EVENT_TYPE="$1"
+        shift
+        ;;
+    --branch)
+        BRANCH="$2"
+        shift 2
+        ;;
+    --action)
+        PR_ACTION="$2"
+        shift 2
+        ;;
+    --pr-branch)
+        PR_BRANCH="$2"
+        shift 2
+        ;;
+    --pr-number)
+        PR_NUMBER="$2"
+        shift 2
+        ;;
+    --pr-title)
+        PR_TITLE="$2"
+        shift 2
+        ;;
+    --help)
+        usage
+        exit 0
+        ;;
+    *)
+        echo "Unknown option: $1" >&2
+        usage
+        exit 1
+        ;;
+    esac
+done
+
+if [[ -z "$EVENT_TYPE" ]]; then
+    echo "Error: Event type is required" >&2
+    usage
+    exit 1
+fi
+
+# Get repository information
+REPO_URL="$(git remote get-url origin)"
+REPO_FULL_NAME="$(echo "$REPO_URL" | grep -oP 'github[.]com.\K[^.]*')"
+REPO_OWNER="${REPO_FULL_NAME%/*}"
+REPO_NAME="${REPO_FULL_NAME#*/}"
+
+# Get current branch if not specified
+if [[ -z "$BRANCH" ]]; then
+    BRANCH="$(git rev-parse --abbrev-ref HEAD)"
+fi
+
+# Get git data for the specified branch
+if git rev-parse --verify "$BRANCH" >/dev/null 2>&1; then
+    GIT_AFTER="$(git rev-parse "$BRANCH")"
+    if git rev-parse --verify "${BRANCH}~1" >/dev/null 2>&1; then
+        GIT_BEFORE="$(git rev-parse "${BRANCH}~1")"
+    else
+        GIT_BEFORE="0000000000000000000000000000000000000000"
+    fi
+
+    GIT_HEAD_MESSAGE="$(git log -1 --pretty=%s "$BRANCH")"
+    GIT_HEAD_BODY="$(git log -1 --pretty=%b "$BRANCH")"
+    GIT_HEAD_TIMESTAMP="$(git log -1 --pretty=%cI "$BRANCH")"
+    GIT_HEAD_AUTHOR_NAME="$(git log -1 --pretty=%an "$BRANCH")"
+    GIT_HEAD_AUTHOR_EMAIL="$(git log -1 --pretty=%ae "$BRANCH")"
+    GIT_HEAD_COMMITTER_NAME="$(git log -1 --pretty=%cn "$BRANCH")"
+    GIT_HEAD_COMMITTER_EMAIL="$(git log -1 --pretty=%ce "$BRANCH")"
+    GIT_TREE_ID="$(git rev-parse "${BRANCH}^{tree}")"
+else
+    echo "Error: Branch '$BRANCH' does not exist" >&2
+    exit 1
+fi
+
+# Generate timestamp for event
+EVENT_TIMESTAMP="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+NODE_ID_USER="$(echo -n '04:User0' | base64)"
+NODE_ID_REPO="R_$(echo -n 'FAKE' | base64)"
+NODE_ID_PR="PR_$(echo -n 'FAKE' | base64)"
+
+# Generate complete repository object for push events
+generate_repository_object() {
+    jq -n \
+        --arg repo_id "0" \
+        --arg repo_name "$REPO_NAME" \
+        --arg repo_full_name "$REPO_FULL_NAME" \
+        --arg repo_owner "$REPO_OWNER" \
+        --arg node_id_user "$NODE_ID_USER" \
+        --arg node_id_repo "$NODE_ID_REPO" \
+        --arg default_branch "main" \
+        --arg created_at "0" \
+        --arg pushed_at "0" \
+        --arg updated_at "0000-00-00T00:00:00Z" \
+        '{
+            id: ($repo_id | tonumber),
+            node_id: $node_id_repo,
+            name: $repo_name,
+            full_name: $repo_full_name,
+            private: false,
+            owner: {
+                name: $repo_owner,
+                login: $repo_owner,
+                id: 0,
+                email: "fake@example.com",
+                node_id: $node_id_user,
+                avatar_url: "https://avatars.githubusercontent.com/u/0?v=4",
+                gravatar_id: "",
+                url: "https://api.github.com/users/\($repo_owner)",
+                html_url: "https://github.com/\($repo_owner)",
+                events_url: "https://api.github.com/users/\($repo_owner)/events{/privacy}",
+                followers_url: "https://api.github.com/users/\($repo_owner)/followers",
+                following_url: "https://api.github.com/users/\($repo_owner)/following{/other_user}",
+                gists_url: "https://api.github.com/users/\($repo_owner)/gists{/gist_id}",
+                organizations_url: "https://api.github.com/users/\($repo_owner)/orgs",
+                received_events_url: "https://api.github.com/users/\($repo_owner)/received_events",
+                repos_url: "https://api.github.com/users/\($repo_owner)/repos",
+                starred_url: "https://api.github.com/users/\($repo_owner)/starred{/owner}{/repo}",
+                subscriptions_url: "https://api.github.com/users/\($repo_owner)/subscriptions",
+                type: "User",
+                site_admin: false,
+                user_view_type: "public"
+            },
+            html_url: "https://github.com/\($repo_full_name)",
+            description: null,
+            fork: false,
+            url: "https://api.github.com/repos/\($repo_full_name)",
+            archive_url: "https://api.github.com/repos/\($repo_full_name)/{archive_format}{/ref}",
+            assignees_url: "https://api.github.com/repos/\($repo_full_name)/assignees{/user}",
+            blobs_url: "https://api.github.com/repos/\($repo_full_name)/git/blobs{/sha}",
+            branches_url: "https://api.github.com/repos/\($repo_full_name)/branches{/branch}",
+            clone_url: "https://github.com/\($repo_full_name).git",
+            collaborators_url: "https://api.github.com/repos/\($repo_full_name)/collaborators{/collaborator}",
+            comments_url: "https://api.github.com/repos/\($repo_full_name)/comments{/number}",
+            commits_url: "https://api.github.com/repos/\($repo_full_name)/commits{/sha}",
+            compare_url: "https://api.github.com/repos/\($repo_full_name)/compare/{base}...{head}",
+            contents_url: "https://api.github.com/repos/\($repo_full_name)/contents/{+path}",
+            contributors_url: "https://api.github.com/repos/\($repo_full_name)/contributors",
+            deployments_url: "https://api.github.com/repos/\($repo_full_name)/deployments",
+            downloads_url: "https://api.github.com/repos/\($repo_full_name)/downloads",
+            events_url: "https://api.github.com/repos/\($repo_full_name)/events",
+            forks_url: "https://api.github.com/repos/\($repo_full_name)/forks",
+            git_commits_url: "https://api.github.com/repos/\($repo_full_name)/git/commits{/sha}",
+            git_refs_url: "https://api.github.com/repos/\($repo_full_name)/git/refs{/sha}",
+            git_tags_url: "https://api.github.com/repos/\($repo_full_name)/git/tags{/sha}",
+            git_url: "git://github.com/\($repo_full_name).git",
+            hooks_url: "https://api.github.com/repos/\($repo_full_name)/hooks",
+            issue_comment_url: "https://api.github.com/repos/\($repo_full_name)/issues/comments{/number}",
+            issue_events_url: "https://api.github.com/repos/\($repo_full_name)/issues/events{/number}",
+            issues_url: "https://api.github.com/repos/\($repo_full_name)/issues{/number}",
+            keys_url: "https://api.github.com/repos/\($repo_full_name)/keys{/key_id}",
+            labels_url: "https://api.github.com/repos/\($repo_full_name)/labels{/name}",
+            languages_url: "https://api.github.com/repos/\($repo_full_name)/languages",
+            merges_url: "https://api.github.com/repos/\($repo_full_name)/merges",
+            milestones_url: "https://api.github.com/repos/\($repo_full_name)/milestones{/number}",
+            mirror_url: null,
+            notifications_url: "https://api.github.com/repos/\($repo_full_name)/notifications{?since,all,participating}",
+            pulls_url: "https://api.github.com/repos/\($repo_full_name)/pulls{/number}",
+            releases_url: "https://api.github.com/repos/\($repo_full_name)/releases{/id}",
+            ssh_url: "git@github.com:\($repo_full_name).git",
+            stargazers_url: "https://api.github.com/repos/\($repo_full_name)/stargazers",
+            statuses_url: "https://api.github.com/repos/\($repo_full_name)/statuses/{sha}",
+            subscribers_url: "https://api.github.com/repos/\($repo_full_name)/subscribers",
+            subscription_url: "https://api.github.com/repos/\($repo_full_name)/subscription",
+            svn_url: "https://github.com/\($repo_full_name)",
+            tags_url: "https://api.github.com/repos/\($repo_full_name)/tags",
+            teams_url: "https://api.github.com/repos/\($repo_full_name)/teams",
+            trees_url: "https://api.github.com/repos/\($repo_full_name)/git/trees{/sha}",
+            homepage: null,
+            size: 0,
+            stargazers: 0,
+            stargazers_count: 0,
+            watchers_count: 0,
+            language: "Go",
+            has_issues: true,
+            has_projects: true,
+            has_wiki: false,
+            has_pages: false,
+            has_downloads: true,
+            has_discussions: false,
+            archived: false,
+            disabled: false,
+            open_issues_count: 0,
+            license: null,
+            allow_forking: true,
+            is_template: false,
+            web_commit_signoff_required: false,
+            topics: [],
+            forks: 0,
+            forks_count: 0,
+            open_issues: 0,
+            watchers: 0,
+            default_branch: $default_branch,
+            master_branch: $default_branch,
+            created_at: ($created_at | tonumber),
+            pushed_at: ($pushed_at | tonumber),
+            updated_at: $updated_at,
+            visibility: "private"
+        }'
+}
+
+# Generate repository object for pull request events
+generate_pr_repository_object() {
+    jq -n \
+        --arg repo_id "0" \
+        --arg repo_name "$REPO_NAME" \
+        --arg repo_full_name "$REPO_FULL_NAME" \
+        --arg repo_owner "$REPO_OWNER" \
+        --arg node_id_user "$NODE_ID_USER" \
+        --arg node_id_repo "$NODE_ID_REPO" \
+        --arg default_branch "main" \
+        --arg created_at "0000-00-00T00:00:00Z" \
+        --arg pushed_at "0" \
+        --arg updated_at "0000-00-00T00:00:00Z" \
+        '{
+            id: ($repo_id | tonumber),
+            node_id: $node_id_repo,
+            name: $repo_name,
+            full_name: $repo_full_name,
+            private: false,
+            owner: {
+                login: $repo_owner,
+                id: 0,
+                node_id: $node_id_user,
+                avatar_url: "https://avatars.githubusercontent.com/u/0?v=4",
+                gravatar_id: "",
+                url: "https://api.github.com/users/\($repo_owner)",
+                html_url: "https://github.com/\($repo_owner)",
+                events_url: "https://api.github.com/users/\($repo_owner)/events{/privacy}",
+                followers_url: "https://api.github.com/users/\($repo_owner)/followers",
+                following_url: "https://api.github.com/users/\($repo_owner)/following{/other_user}",
+                gists_url: "https://api.github.com/users/\($repo_owner)/gists{/gist_id}",
+                organizations_url: "https://api.github.com/users/\($repo_owner)/orgs",
+                received_events_url: "https://api.github.com/users/\($repo_owner)/received_events",
+                repos_url: "https://api.github.com/users/\($repo_owner)/repos",
+                starred_url: "https://api.github.com/users/\($repo_owner)/starred{/owner}{/repo}",
+                subscriptions_url: "https://api.github.com/users/\($repo_owner)/subscriptions",
+                type: "User",
+                site_admin: false,
+                user_view_type: "public"
+            },
+            html_url: "https://github.com/\($repo_full_name)",
+            description: null,
+            fork: false,
+            url: "https://api.github.com/repos/\($repo_full_name)",
+            archive_url: "https://api.github.com/repos/\($repo_full_name)/{archive_format}{/ref}",
+            assignees_url: "https://api.github.com/repos/\($repo_full_name)/assignees{/user}",
+            blobs_url: "https://api.github.com/repos/\($repo_full_name)/git/blobs{/sha}",
+            branches_url: "https://api.github.com/repos/\($repo_full_name)/branches{/branch}",
+            clone_url: "https://github.com/\($repo_full_name).git",
+            collaborators_url: "https://api.github.com/repos/\($repo_full_name)/collaborators{/collaborator}",
+            comments_url: "https://api.github.com/repos/\($repo_full_name)/comments{/number}",
+            commits_url: "https://api.github.com/repos/\($repo_full_name)/commits{/sha}",
+            compare_url: "https://api.github.com/repos/\($repo_full_name)/compare/{base}...{head}",
+            contents_url: "https://api.github.com/repos/\($repo_full_name)/contents/{+path}",
+            contributors_url: "https://api.github.com/repos/\($repo_full_name)/contributors",
+            deployments_url: "https://api.github.com/repos/\($repo_full_name)/deployments",
+            downloads_url: "https://api.github.com/repos/\($repo_full_name)/downloads",
+            events_url: "https://api.github.com/repos/\($repo_full_name)/events",
+            forks_url: "https://api.github.com/repos/\($repo_full_name)/forks",
+            git_commits_url: "https://api.github.com/repos/\($repo_full_name)/git/commits{/sha}",
+            git_refs_url: "https://api.github.com/repos/\($repo_full_name)/git/refs{/sha}",
+            git_tags_url: "https://api.github.com/repos/\($repo_full_name)/git/tags{/sha}",
+            git_url: "git://github.com/\($repo_full_name).git",
+            hooks_url: "https://api.github.com/repos/\($repo_full_name)/hooks",
+            issue_comment_url: "https://api.github.com/repos/\($repo_full_name)/issues/comments{/number}",
+            issue_events_url: "https://api.github.com/repos/\($repo_full_name)/issues/events{/number}",
+            issues_url: "https://api.github.com/repos/\($repo_full_name)/issues{/number}",
+            keys_url: "https://api.github.com/repos/\($repo_full_name)/keys{/key_id}",
+            labels_url: "https://api.github.com/repos/\($repo_full_name)/labels{/name}",
+            languages_url: "https://api.github.com/repos/\($repo_full_name)/languages",
+            merges_url: "https://api.github.com/repos/\($repo_full_name)/merges",
+            milestones_url: "https://api.github.com/repos/\($repo_full_name)/milestones{/number}",
+            mirror_url: null,
+            notifications_url: "https://api.github.com/repos/\($repo_full_name)/notifications{?since,all,participating}",
+            pulls_url: "https://api.github.com/repos/\($repo_full_name)/pulls{/number}",
+            releases_url: "https://api.github.com/repos/\($repo_full_name)/releases{/id}",
+            ssh_url: "git@github.com:\($repo_full_name).git",
+            stargazers_url: "https://api.github.com/repos/\($repo_full_name)/stargazers",
+            statuses_url: "https://api.github.com/repos/\($repo_full_name)/statuses/{sha}",
+            subscribers_url: "https://api.github.com/repos/\($repo_full_name)/subscribers",
+            subscription_url: "https://api.github.com/repos/\($repo_full_name)/subscription",
+            svn_url: "https://github.com/\($repo_full_name)",
+            tags_url: "https://api.github.com/repos/\($repo_full_name)/tags",
+            teams_url: "https://api.github.com/repos/\($repo_full_name)/teams",
+            trees_url: "https://api.github.com/repos/\($repo_full_name)/git/trees{/sha}",
+            homepage: null,
+            size: 0,
+            stargazers_count: 0,
+            watchers_count: 0,
+            language: "Go",
+            has_issues: true,
+            has_projects: true,
+            has_wiki: false,
+            has_pages: false,
+            has_downloads: true,
+            has_discussions: false,
+            archived: false,
+            disabled: false,
+            open_issues_count: 0,
+            license: null,
+            allow_forking: true,
+            allow_auto_merge: false,
+            allow_merge_commit: true,
+            allow_rebase_merge: true,
+            allow_squash_merge: true,
+            allow_update_branch: false,
+            delete_branch_on_merge: false,
+            merge_commit_message: "PR_TITLE",
+            merge_commit_title: "MERGE_MESSAGE",
+            squash_merge_commit_message: "COMMIT_MESSAGES",
+            squash_merge_commit_title: "COMMIT_OR_PR_TITLE",
+            use_squash_pr_title_as_default: false,
+            is_template: false,
+            web_commit_signoff_required: false,
+            topics: [],
+            forks: 0,
+            forks_count: 0,
+            open_issues: 0,
+            watchers: 0,
+            default_branch: $default_branch,
+            created_at: $created_at,
+            pushed_at: ($pushed_at | tonumber),
+            updated_at: $updated_at,
+            visibility: "private"
+        }'
+}
+
+# Generate push event
+generate_push_event() {
+    local repository_object
+    local commit_object
+    local head_commit_object
+    local commits_array
+
+    repository_object="$(generate_repository_object)"
+    commit_object="$(generate_commit_object "$GIT_AFTER" "$GIT_HEAD_MESSAGE" "$GIT_HEAD_BODY" "$GIT_HEAD_TIMESTAMP" "$GIT_HEAD_AUTHOR_NAME" "$GIT_HEAD_AUTHOR_EMAIL" "$GIT_HEAD_COMMITTER_NAME" "$GIT_HEAD_COMMITTER_EMAIL" "$GIT_TREE_ID")"
+    head_commit_object="$(generate_head_commit_object "$GIT_AFTER" "$GIT_HEAD_MESSAGE" "$GIT_HEAD_BODY" "$GIT_HEAD_TIMESTAMP" "$GIT_HEAD_AUTHOR_NAME" "$GIT_HEAD_AUTHOR_EMAIL" "$GIT_HEAD_COMMITTER_NAME" "$GIT_HEAD_COMMITTER_EMAIL" "$GIT_TREE_ID")"
+    commits_array="[$commit_object]"
+
+    jq -n \
+        --arg ref "refs/heads/$BRANCH" \
+        --arg before "$GIT_BEFORE" \
+        --arg after "$GIT_AFTER" \
+        --arg repo_full_name "$REPO_FULL_NAME" \
+        --arg repo_owner "$REPO_OWNER" \
+        --arg author_email "$GIT_HEAD_AUTHOR_EMAIL" \
+        --arg node_id_user "$NODE_ID_USER" \
+        --argjson repository "$repository_object" \
+        --argjson head_commit "$head_commit_object" \
+        --argjson commits "$commits_array" \
+        '{
+            ref: $ref,
+            before: $before,
+            after: $after,
+            repository: $repository,
+            pusher: {
+                name: $repo_owner,
+                email: $author_email
+            },
+            sender: {
+                login: $repo_owner,
+                id: 0,
+                node_id: $node_id_user,
+                avatar_url: "https://avatars.githubusercontent.com/u/0?v=4",
+                gravatar_id: "",
+                url: "https://api.github.com/users/\($repo_owner)",
+                html_url: "https://github.com/\($repo_owner)",
+                events_url: "https://api.github.com/users/\($repo_owner)/events{/privacy}",
+                followers_url: "https://api.github.com/users/\($repo_owner)/followers",
+                following_url: "https://api.github.com/users/\($repo_owner)/following{/other_user}",
+                gists_url: "https://api.github.com/users/\($repo_owner)/gists{/gist_id}",
+                organizations_url: "https://api.github.com/users/\($repo_owner)/orgs",
+                received_events_url: "https://api.github.com/users/\($repo_owner)/received_events",
+                repos_url: "https://api.github.com/users/\($repo_owner)/repos",
+                starred_url: "https://api.github.com/users/\($repo_owner)/starred{/owner}{/repo}",
+                subscriptions_url: "https://api.github.com/users/\($repo_owner)/subscriptions",
+                type: "User",
+                site_admin: false,
+                user_view_type: "public"
+            },
+            head_commit: $head_commit,
+            commits: $commits,
+            created: ($before == "0000000000000000000000000000000000000000"),
+            deleted: false,
+            forced: false,
+            base_ref: null,
+            compare: "https://github.com/\($repo_full_name)/compare/\($before[0:12])...\($after[0:12])"
+        }'
+}
+
+# Common commit object for push events (no file changes)
+generate_commit_object() {
+    local commit_id="$1"
+    local message="$2"
+    local body="$3"
+    local timestamp="$4"
+    local author_name="$5"
+    local author_email="$6"
+    local committer_name="$7"
+    local committer_email="$8"
+    local tree_id="$9"
+
+    jq -n \
+        --arg id "$commit_id" \
+        --arg tree_id "$tree_id" \
+        --arg message "$message" \
+        --arg body "$body" \
+        --arg timestamp "$timestamp" \
+        --arg author_name "$author_name" \
+        --arg author_email "$author_email" \
+        --arg committer_name "$committer_name" \
+        --arg committer_email "$committer_email" \
+        --arg repo_full_name "$REPO_FULL_NAME" \
+        --arg repo_owner "$REPO_OWNER" \
+        '{
+            id: $id,
+            tree_id: $tree_id,
+            distinct: true,
+            message: (if $body != "" then "\($message)\n\n\($body)" else $message end),
+            timestamp: $timestamp,
+            url: "https://github.com/\($repo_full_name)/commit/\($id)",
+            author: {
+                name: $author_name,
+                email: $author_email,
+                username: $repo_owner
+            },
+            committer: {
+                name: $committer_name,
+                email: $committer_email,
+                username: $repo_owner
+            }
+        }'
+}
+
+# Head commit object for push events (includes file changes)
+generate_head_commit_object() {
+    local commit_id="$1"
+    local message="$2"
+    local body="$3"
+    local timestamp="$4"
+    local author_name="$5"
+    local author_email="$6"
+    local committer_name="$7"
+    local committer_email="$8"
+    local tree_id="$9"
+
+    jq -n \
+        --arg id "$commit_id" \
+        --arg tree_id "$tree_id" \
+        --arg message "$message" \
+        --arg body "$body" \
+        --arg timestamp "$timestamp" \
+        --arg author_name "$author_name" \
+        --arg author_email "$author_email" \
+        --arg committer_name "$committer_name" \
+        --arg committer_email "$committer_email" \
+        --arg repo_full_name "$REPO_FULL_NAME" \
+        --arg repo_owner "$REPO_OWNER" \
+        '{
+            id: $id,
+            tree_id: $tree_id,
+            distinct: true,
+            message: (if $body != "" then "\($message)\n\n\($body)" else $message end),
+            timestamp: $timestamp,
+            url: "https://github.com/\($repo_full_name)/commit/\($id)",
+            author: {
+                name: $author_name,
+                email: $author_email,
+                username: $repo_owner,
+            },
+            committer: {
+                name: $committer_name,
+                email: $committer_email,
+                username: $repo_owner,
+            }
+        }'
+}
+
+# Generate pull request event
+generate_pull_request_event() {
+    local repository_object
+    local pr_num="${PR_NUMBER:-0}"
+    local pr_title_text="${PR_TITLE:-chore: release v1.0.0}"
+
+    repository_object="$(generate_pr_repository_object)"
+
+    jq -n \
+        --arg action "$PR_ACTION" \
+        --arg pr_number "$pr_num" \
+        --arg pr_title "$pr_title_text" \
+        --arg pr_branch "$PR_BRANCH" \
+        --arg target_branch "$BRANCH" \
+        --arg repo_full_name "$REPO_FULL_NAME" \
+        --arg repo_owner "$REPO_OWNER" \
+        --arg node_id_user "$NODE_ID_USER" \
+        --arg node_id_pr "$NODE_ID_PR" \
+        --arg timestamp "$EVENT_TIMESTAMP" \
+        --argjson repository "$repository_object" \
+        '{
+            action: $action,
+            number: ($pr_number | tonumber),
+            pull_request: {
+                url: "https://api.github.com/repos/\($repo_full_name)/pulls/\($pr_number)",
+                id: 0,
+                node_id: $node_id_pr,
+                html_url: "https://github.com/\($repo_full_name)/pull/\($pr_number)",
+                diff_url: "https://github.com/\($repo_full_name)/pull/\($pr_number).diff",
+                patch_url: "https://github.com/\($repo_full_name)/pull/\($pr_number).patch",
+                issue_url: "https://api.github.com/repos/\($repo_full_name)/issues/\($pr_number)",
+                number: ($pr_number | tonumber),
+                state: "open",
+                locked: false,
+                title: $pr_title,
+                user: {
+                    login: $repo_owner,
+                    id: 0,
+                    node_id: $node_id_user,
+                    avatar_url: "https://avatars.githubusercontent.com/u/0?v=4",
+                    gravatar_id: "",
+                    url: "https://api.github.com/users/\($repo_owner)",
+                    html_url: "https://github.com/\($repo_owner)",
+                    events_url: "https://api.github.com/users/\($repo_owner)/events{/privacy}",
+                    followers_url: "https://api.github.com/users/\($repo_owner)/followers",
+                    following_url: "https://api.github.com/users/\($repo_owner)/following{/other_user}",
+                    gists_url: "https://api.github.com/users/\($repo_owner)/gists{/gist_id}",
+                    organizations_url: "https://api.github.com/users/\($repo_owner)/orgs",
+                    received_events_url: "https://api.github.com/users/\($repo_owner)/received_events",
+                    repos_url: "https://api.github.com/users/\($repo_owner)/repos",
+                    starred_url: "https://api.github.com/users/\($repo_owner)/starred{/owner}{/repo}",
+                    subscriptions_url: "https://api.github.com/users/\($repo_owner)/subscriptions",
+                    type: "User",
+                    site_admin: false,
+                    user_view_type: "public"
+                },
+                body: "FAKE_PR_BODY",
+                created_at: $timestamp,
+                updated_at: $timestamp,
+                closed_at: null,
+                merged_at: null,
+                merge_commit_sha: null,
+                assignee: null,
+                assignees: [],
+                requested_reviewers: [],
+                requested_teams: [],
+                labels: [],
+                milestone: null,
+                draft: false,
+                additions: 0,
+                deletions: 0,
+                changed_files: 0,
+                commits: 0,
+                review_comments: 0,
+                comments: 0,
+                maintainer_can_modify: false,
+                rebaseable: null,
+                mergeable: null,
+                mergeable_state: "unknown",
+                merged_by: null,
+                merged: false,
+                commits_url: "https://api.github.com/repos/\($repo_full_name)/pulls/\($pr_number)/commits",
+                review_comments_url: "https://api.github.com/repos/\($repo_full_name)/pulls/\($pr_number)/comments",
+                review_comment_url: "https://api.github.com/repos/\($repo_full_name)/pulls/comments{/number}",
+                comments_url: "https://api.github.com/repos/\($repo_full_name)/issues/\($pr_number)/comments",
+                statuses_url: "https://api.github.com/repos/\($repo_full_name)/statuses/FAKE000000000000000000000000000000000000",
+                head: {
+                    label: "\($repo_owner):\($pr_branch)",
+                    ref: $pr_branch,
+                    sha: "0000000000000000000000000000000000000000",
+                    user: {
+                        login: $repo_owner,
+                        id: 0,
+                        node_id: $node_id_user,
+                        avatar_url: "https://avatars.githubusercontent.com/u/0?v=4",
+                        gravatar_id: "",
+                        url: "https://api.github.com/users/\($repo_owner)",
+                        html_url: "https://github.com/\($repo_owner)",
+                        events_url: "https://api.github.com/users/\($repo_owner)/events{/privacy}",
+                        followers_url: "https://api.github.com/users/\($repo_owner)/followers",
+                        following_url: "https://api.github.com/users/\($repo_owner)/following{/other_user}",
+                        gists_url: "https://api.github.com/users/\($repo_owner)/gists{/gist_id}",
+                        organizations_url: "https://api.github.com/users/\($repo_owner)/orgs",
+                        received_events_url: "https://api.github.com/users/\($repo_owner)/received_events",
+                        repos_url: "https://api.github.com/users/\($repo_owner)/repos",
+                        starred_url: "https://api.github.com/users/\($repo_owner)/starred{/owner}{/repo}",
+                        subscriptions_url: "https://api.github.com/users/\($repo_owner)/subscriptions",
+                        type: "User",
+                        site_admin: false,
+                        user_view_type: "public"
+                    },
+                    repo: $repository
+                },
+                base: {
+                    label: "\($repo_owner):\($target_branch)",
+                    ref: $target_branch,
+                    sha: "1111111111111111111111111111111111111111",
+                    user: {
+                        login: $repo_owner,
+                        id: 0,
+                        node_id: $node_id_user,
+                        avatar_url: "https://avatars.githubusercontent.com/u/0?v=4",
+                        gravatar_id: "",
+                        url: "https://api.github.com/users/\($repo_owner)",
+                        html_url: "https://github.com/\($repo_owner)",
+                        events_url: "https://api.github.com/users/\($repo_owner)/events{/privacy}",
+                        followers_url: "https://api.github.com/users/\($repo_owner)/followers",
+                        following_url: "https://api.github.com/users/\($repo_owner)/following{/other_user}",
+                        gists_url: "https://api.github.com/users/\($repo_owner)/gists{/gist_id}",
+                        organizations_url: "https://api.github.com/users/\($repo_owner)/orgs",
+                        received_events_url: "https://api.github.com/users/\($repo_owner)/received_events",
+                        repos_url: "https://api.github.com/users/\($repo_owner)/repos",
+                        starred_url: "https://api.github.com/users/\($repo_owner)/starred{/owner}{/repo}",
+                        subscriptions_url: "https://api.github.com/users/\($repo_owner)/subscriptions",
+                        type: "User",
+                        site_admin: false,
+                        user_view_type: "public"
+                    },
+                    repo: $repository
+                },
+                _links: {
+                    self: {
+                        href: "https://api.github.com/repos/\($repo_full_name)/pulls/\($pr_number)"
+                    },
+                    html: {
+                        href: "https://github.com/\($repo_full_name)/pull/\($pr_number)"
+                    },
+                    issue: {
+                        href: "https://api.github.com/repos/\($repo_full_name)/issues/\($pr_number)"
+                    },
+                    comments: {
+                        href: "https://api.github.com/repos/\($repo_full_name)/issues/\($pr_number)/comments"
+                    },
+                    review_comments: {
+                        href: "https://api.github.com/repos/\($repo_full_name)/pulls/\($pr_number)/comments"
+                    },
+                    review_comment: {
+                        href: "https://api.github.com/repos/\($repo_full_name)/pulls/comments{/number}"
+                    },
+                    commits: {
+                        href: "https://api.github.com/repos/\($repo_full_name)/pulls/\($pr_number)/commits"
+                    },
+                    statuses: {
+                        href: "https://api.github.com/repos/\($repo_full_name)/statuses/0000000000000000000000000000000000000000"
+                    }
+                },
+                author_association: "OWNER",
+                auto_merge: null,
+                active_lock_reason: null
+            },
+            repository: $repository,
+            sender: {
+                login: $repo_owner,
+                id: 0,
+                node_id: $node_id_user,
+                avatar_url: "https://avatars.githubusercontent.com/u/0?v=4",
+                gravatar_id: "",
+                url: "https://api.github.com/users/\($repo_owner)",
+                html_url: "https://github.com/\($repo_owner)",
+                events_url: "https://api.github.com/users/\($repo_owner)/events{/privacy}",
+                followers_url: "https://api.github.com/users/\($repo_owner)/followers",
+                following_url: "https://api.github.com/users/\($repo_owner)/following{/other_user}",
+                gists_url: "https://api.github.com/users/\($repo_owner)/gists{/gist_id}",
+                organizations_url: "https://api.github.com/users/\($repo_owner)/orgs",
+                received_events_url: "https://api.github.com/users/\($repo_owner)/received_events",
+                repos_url: "https://api.github.com/users/\($repo_owner)/repos",
+                starred_url: "https://api.github.com/users/\($repo_owner)/starred{/owner}{/repo}",
+                subscriptions_url: "https://api.github.com/users/\($repo_owner)/subscriptions",
+                type: "User",
+                site_admin: false,
+                user_view_type: "public"
+            }
+        } +
+        if $action == "edited" then
+            {
+                changes: {
+                    title: {
+                        from: "feat: add a"
+                    }
+                }
+            }
+        else {} end'
+}
+
+# Generate the appropriate event
+case "$EVENT_TYPE" in
+push)
+    generate_push_event
+    ;;
+pull_request)
+    generate_pull_request_event
+    ;;
+*)
+    echo "Error: Unknown event type: $EVENT_TYPE" >&2
+    exit 1
+    ;;
+esac

@@ -1,0 +1,166 @@
+name: 'Release PR - Release'
+
+on:
+  workflow_call:
+    inputs:
+      commit_prefix:
+        description: 'Commit message prefix'
+        required: true
+        type: string
+      pr_branch:
+        description: 'Technical branch for release PRs'
+        required: true
+        type: string
+      target_branch:
+        description: 'Target branch for releases'
+        required: true
+        type: string
+      version_cmd:
+        description: 'Shell command to update additional files using $RELEASE_PR_VERSION'
+        required: false
+        type: string
+    outputs:
+      result:
+        description: 'Result: "released" or nothing'
+        value: ${{ jobs.main.outputs.result }}
+      version:
+        description: 'Current version'
+        value: ${{ jobs.main.outputs.version }}
+      changelog:
+        description: 'Current version changelog'
+        value: ${{ jobs.main.outputs.changelog }}
+
+permissions:
+  contents: write # To create a release tag OR release_pr branch on race condition.
+  pull-requests: write # To create PR from release_pr branch on race condition.
+
+jobs:
+  main:
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    outputs:
+      result: ${{ steps.vars.outputs.result }}
+      version: ${{ steps.vars.outputs.version }}
+      changelog: ${{ steps.vars.outputs.changelog }}
+    env:
+      COMMIT_PREFIX: ${{ inputs.commit_prefix }}
+      PR_BRANCH: ${{ inputs.pr_branch }}
+      TARGET_BRANCH: ${{ inputs.target_branch }}
+      VERSION_CMD: ${{ inputs.version_cmd }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # For git-cliff.
+
+      - name: Enable `git push` when `act` is run without `--no-skip-checkout`
+        if: ${{ env.ACT }}
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+      - uses: jdx/mise-action@v2
+        with:
+          install_args: 'gh git-cliff'
+        env:
+          GITHUB_TOKEN: ${{ github.token }} # Increase GitHub API rate limits.
+      - run: mise use -g gh git-cliff
+
+      - uses: fregante/setup-git-user@v2
+
+      # Race condition handling:
+      # 1. Extract version from PR title (merge commit) or current commit (squash merge).
+      # 2. Regenerate CHANGELOG.md with this version.
+      # 3. If CHANGELOG.md changed, it means one of these race conditions occurred:
+      #    - A user changed version in release PR title and merged release PR before
+      #      release-pr-set-version workflow updated release-pr branch.
+      #    - A significant commit was pushed to master branch but user merged release PR before
+      #      release-pr-prepare workflow updated release-pr branch.
+      # 4. In case of race condition, create new release PR instead of proceeding with release.
+      - name: Extract version and check race condition
+        shell: bash
+        env:
+          GITHUB_REPO: ${{ github.repository }} # Used by git-cliff.
+          GITHUB_TOKEN: ${{ github.token }} # Used by gh.
+        run: |
+          git checkout -B "$PR_BRANCH"
+
+          # Extract version from PR title for merge commits, otherwise from current commit
+          release_msg=$(git log -1 --pretty=format:"%s")
+          if echo "$release_msg" | grep -q '^Merge pull request #[0-9]\+'; then
+            pr_number=$(echo "$release_msg" | grep -oP '^Merge pull request #\K[0-9]+')
+            release_msg=$(gh pr view "$pr_number" --json title --jq '.title')
+          fi
+          VERSION=$(echo "$release_msg" | grep -oP "^\Q${COMMIT_PREFIX}\E\s+\Kv?[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?")
+          test -n "$VERSION" || {
+            echo "::error::Failed to extract version from release message: '$release_msg'"
+            echo "::notice::Expected format: '$COMMIT_PREFIX v1.2.3' (version may be without 'v' prefix)"
+            exit 1
+          }
+
+          VERSION="v${VERSION#v}"
+          COMMIT_MSG="$COMMIT_PREFIX $VERSION"
+          CHANGELOG=$(git-cliff --tag "$VERSION" --unreleased --strip all | tail -n +3)
+          {
+            echo "VERSION=$VERSION"
+            echo "CHANGELOG<<EOF"
+            echo "$CHANGELOG"
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+
+          # Check for race condition
+          git-cliff --tag "$VERSION" -o CHANGELOG.md
+          if git diff --quiet -- CHANGELOG.md; then
+            echo "::notice::No race condition detected - proceeding with release"
+            exit 0
+          fi
+
+          echo "::warning::Race condition detected - CHANGELOG.md differs from expected state"
+          git diff -- CHANGELOG.md
+
+          # Create release-pr branch and PR due to race condition
+          pr_number=$(gh pr list --state open --head "$PR_BRANCH" --json number --jq '.[0].number')
+          if [ -z "$pr_number" ]; then
+            # Run custom version command if provided
+            if [ -n "$VERSION_CMD" ]; then
+              echo "::group::Running custom version command"
+              RELEASE_PR_VERSION="$VERSION" \
+                bash -e -o pipefail -c "$VERSION_CMD"
+              echo "::endgroup::"
+            fi
+
+            git add CHANGELOG.md
+            git commit --allow-empty -m "$COMMIT_MSG"
+            git push origin "$PR_BRANCH" --force
+
+            gh pr create --head "$PR_BRANCH" --base "$TARGET_BRANCH" --title "$COMMIT_MSG" --body "$CHANGELOG"
+            echo "::notice::Created new release PR due to race condition"
+          else
+            echo "::notice::Found existing release PR #$pr_number"
+          fi
+
+          exit 1
+
+      - name: Create and push release tag
+        shell: bash
+        run: |
+          git tag "$VERSION" -m "$CHANGELOG"
+          git push origin "$VERSION"
+
+      - name: Create draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.VERSION }}
+          body: ${{ env.CHANGELOG }}
+          draft: true
+
+      - name: Set output
+        shell: bash
+        id: vars
+        run: |
+          {
+            echo "result=released"
+            echo "version=$VERSION"
+            echo "changelog<<EOF"
+            echo "$CHANGELOG"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"

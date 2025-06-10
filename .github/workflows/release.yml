@@ -1,0 +1,26 @@
+name: Release
+
+on:
+  push: # To create/update release PR and to make a release.
+  pull_request: # To update release PR after manually changing version for the next release.
+    types: [edited]
+
+jobs:
+  release-pr:
+    uses: ./.github/workflows/release-pr.yml
+
+  finalize:
+    needs: [release-pr]
+    if: ${{ needs.release-pr.outputs.result == 'released' }}
+    permissions:
+      contents: write # To update the GitHub release.
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.release-pr.outputs.version }}
+          body: ${{ needs.release-pr.outputs.changelog }}
+          draft: false
+          make_latest: true

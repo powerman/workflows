@@ -1,0 +1,27 @@
+#!/bin/bash
+# Auto-detects and output value for $TEST_REPO.
+# It's a name for a private repo on GitHub for testing workflows instead of current repo.
+#
+# It is fast enough to allow it to be used in mise.toml like this:
+#
+#   [tasks.example]
+#   env.TEST_REPO = '{{ exec(command="test/test_helper/test_repo") }}'
+
+if [[ -n "$TEST_REPO" ]]; then
+    echo "$TEST_REPO"
+    exit 0
+fi
+
+gh_user="$(grep -oP 'user: \K\S*' ~/.config/gh/hosts.yml)" # Faster than `gh api user --jq .login`.
+test_repo="${gh_user}/test-$(basename "$(git rev-parse --show-toplevel)")"
+repo="$(git remote get-url origin | grep -oP 'github[.]com.\K[^.]*')"
+
+if [[ -z "$gh_user" || "$test_repo" == "$repo" ]]; then
+    printf "Failed to auto-detect TEST_REPO:\n"
+    printf "\tGitHub username: '%s'\n" "$gh_user"
+    printf "\tThis repo: '%s'\n" "$repo"
+    printf "\tTEST_REPO: '%s'\n" "$test_repo"
+    exit 1
+fi >&2
+
+echo "$test_repo"
