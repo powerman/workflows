@@ -31,7 +31,7 @@ on:
         value: ${{ jobs.main.outputs.changelog }}
 
 permissions:
-  contents: write # To create a release tag OR release_pr branch on race condition.
+  contents: write # To create a release and a tag OR release_pr branch on race condition.
   pull-requests: write # To create PR from release_pr branch on race condition.
 
 jobs:
