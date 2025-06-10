@@ -48,6 +48,10 @@ on:
   pull_request: # To update release PR after manually changed version
     types: [edited]
 
+permissions:
+  contents: write # To create/update release_pr branch, create a release and a tag.
+  pull-requests: write # To create/update PR from release_pr branch.
+
 jobs:
   release-pr:
     uses: powerman/workflows/.github/workflows/release-pr.yml@main
@@ -195,6 +199,11 @@ on:
   push:
   pull_request:
     types: [edited]
+
+permissions:
+  contents: write # To create/update release_pr branch, create a release and a tag.
+  pull-requests: write # To create/update PR from release_pr branch.
+  id-token: write # For cosign signing.
 
 jobs:
   release-pr:

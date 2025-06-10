@@ -5,6 +5,10 @@ on:
   pull_request: # To update release PR after manually changing version for the next release.
     types: [edited]
 
+permissions:
+  contents: write # To create/update release_pr branch, create a release and a tag.
+  pull-requests: write # To create/update PR from release_pr branch.
+
 jobs:
   release-pr:
     uses: ./.github/workflows/release-pr.yml

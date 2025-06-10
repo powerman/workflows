@@ -45,7 +45,8 @@ concurrency:
   group: release-pr
 
 permissions:
-  contents: read # To call GitHub repos API using `gh` (to check if repository is a fork).
+  contents: write # To create/update release_pr branch, create a release and a tag.
+  pull-requests: write # To create/update PR from release_pr branch.
 
 jobs:
   setup:
@@ -193,9 +194,6 @@ jobs:
   release:
     needs: [setup]
     if: ${{ needs.setup.outputs.action == 'release' }}
-    permissions:
-      contents: write # To create a release tag.
-      pull-requests: write # To create release-pr PR in case of race condition.
     uses: ./.github/workflows/release-pr-release.yml
     with:
       commit_prefix: ${{ needs.setup.outputs.commit_prefix }}
