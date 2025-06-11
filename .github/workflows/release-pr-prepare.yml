@@ -73,7 +73,7 @@ jobs:
           GITHUB_REPO: ${{ github.repository }} # Used by git-cliff.
           GITHUB_TOKEN: ${{ github.token }} # Used by gh.
         run: |
-          VERSION=$(git-cliff --bumped-version)
+          VERSION=$(git-cliff --bumped-version --unreleased)
 
           # Check if existing PR has a manually set version that should be preserved.
           pr_title=$(gh pr list --state open --head "$PR_BRANCH" --json title --jq '.[0].title')
