@@ -14,11 +14,11 @@ version = "1.12.0"
 backend = "aqua:bats-core/bats-core"
 
 [tools.gh]
-version = "2.74.0"
+version = "2.74.1"
 backend = "aqua:cli/cli"
 
 [tools.gh.checksums]
-"gh_2.74.0_linux_amd64.tar.gz" = "sha256:e55c9d49dc49c0b0fef0a9acd3510482fd9e27ff52ae80f8a6e838cd25b4cd89"
+"gh_2.74.1_linux_amd64.tar.gz" = "sha256:d62406233a42e0dc577dcead8d7bafabcc4c548d9c3a6da761c6709bc8f4b373"
 
 [tools.git-cliff]
 version = "2.9.1"
