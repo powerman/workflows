@@ -34,9 +34,25 @@ be released and what changes will be included.
 6. **Race Condition Protection**: If changes occur during merge, a new PR is created instead
    of releasing
 
+### Project Requirements
+
+1. **Single project per repository**: No monorepo support.
+2. **CHANGELOG.md**: Must be in repository root, managed by `git-cliff`.
+3. **git-cliff configuration**: Proper `cliff.toml` configuration required.
+4. **Semantic versioning**: Project must use semver for releases.
+5. **Auto version bump managed by git-cliff**: Project must use (mostly) conventional commits.
+6. **Git tags**: Releases must be tagged with version numbers.
+7. **Repository permissions**: Actions must be allowed to create PRs.
+
 ### Quick Start
 
-#### 1. Create Release Workflow
+#### 1. Set Required Repository Settings
+
+In **Settings → Actions → General**:
+
+- ✅ **Allow GitHub Actions to create and approve pull requests**
+
+#### 2. Create Release Workflow
 
 Create `.github/workflows/release.yml` in your project:
 
@@ -44,8 +60,8 @@ Create `.github/workflows/release.yml` in your project:
 name: release
 
 on:
-  push: # To create/update release PR and to make release
-  pull_request: # To update release PR after manually changed version
+  push: # To create/update release PR and to make a release.
+  pull_request: # To update release PR after manually changing version for the next release.
     types: [edited]
 
 permissions:
@@ -60,7 +76,7 @@ jobs:
     #   target_branch: 'main'  # Default: repository default branch
     #   pr_branch: 'release-pr'  # Default: 'release-pr'
     #   commit_prefix: 'chore: release'  # Default: 'chore: release'
-    #   version_cmd: 'echo "Custom version command here"'  # Optional
+    #   version_cmd: 'echo "$RELEASE_PR_VERSION" >.my-version'  # Optional
 
   # Optional: Add your own build/upload steps after release
   build-and-upload:
@@ -87,13 +103,7 @@ jobs:
           make_latest: true
 ```
 
-#### 2. Required Repository Settings
-
-In **Settings → Actions → General**:
-
-- ✅ **Allow GitHub Actions to create and approve pull requests**
-
-#### 3. Changelog Configuration
+#### 3. Configure Changelog
 
 Create `cliff.toml` in your project root. See the [git-cliff
 documentation](https://git-cliff.org/docs/configuration) for configuration details.
@@ -101,6 +111,10 @@ documentation](https://git-cliff.org/docs/configuration) for configuration detai
 It is recommended to use <https://github.com/powerman/workflows/blob/main/cliff.toml>
 as an example/starting point. There are a couple of places which mention 'chore: release' and
 these are important to keep or somehow else handle in your config too.
+
+#### 4. Push Or Merge To Release Branch
+
+Release PR should be opened automatically.
 
 ### Workflow Reference
 
@@ -244,54 +258,6 @@ jobs:
           make_latest: true
 ```
 
-#### Language-Specific Examples
-
-##### Go Project
-
-```yaml
-jobs:
-  release-pr:
-    uses: ./.github/workflows/release-pr.yml
-    with:
-      version_cmd: |
-        # Update the version in go.mod or version file if needed
-        echo "module version: $RELEASE_PR_VERSION"
-
-  build-go:
-    needs: [release-pr]
-    if: ${{ needs.release-pr.outputs.result == 'released' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
-      - run: |
-          go build -o ./dist/myapp
-          # Upload steps...
-```
-
-##### Python Project
-
-```yaml
-jobs:
-  release-pr:
-    uses: ./.github/workflows/release-pr.yml
-    with:
-      version_cmd: |
-        sed -i "s/__version__ = \".*\"/__version__ = \"${RELEASE_PR_VERSION#v}\"/" src/__init__.py
-
-  build-python:
-    needs: [release-pr]
-    if: ${{ needs.release-pr.outputs.result == 'released' }}
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-      - run: |
-          pip install build
-          python -m build --outdir ./dist
-          # Upload steps...
-```
-
 ### Race Condition Handling
 
 Release PR automatically handles race conditions where:
@@ -319,34 +285,19 @@ When `version_cmd` is executed:
 - **Environment variable**: `$RELEASE_PR_VERSION` contains full version (e.g., "v1.2.3")
 - **State preservation**: Original working directory state is preserved via git stash
 
-#### Supported Project Types
-
-- **Single project per repository** (no monorepo support)
-- **Any programming language**
-- **Semantic versioning required**
-- **Git tags for release versions**
-- **CHANGELOG.md managed by git-cliff**
-- **Any merge strategy** (merge commit, squash merge, rebase merge)
-
 #### Branch and PR Management
 
 - **Technical branch**: `release-pr` (configurable)
-- **Single commit**: Release branch contains only one commit with version and changelog
+- **Single commit**: Release branch contains only one commit with changelog
+  and optional version-related updates
 - **Force push**: Branch is force-pushed on updates to maintain single commit
-- **Auto-cleanup**: No manual cleanup required
-
-### Project Requirements
-
-1. **CHANGELOG.md**: Must be in repository root, managed by git-cliff
-2. **git-cliff configuration**: Proper `cliff.toml` configuration required
-3. **Semantic versioning**: Project must use semver for releases
-4. **Git tags**: Releases must be tagged with version numbers
-5. **Repository permissions**: Actions must be allowed to create PRs
 
 ### Comparison with Alternatives
 
-Release PR fills a unique niche in the automated release ecosystem. Here's how it compares to
-other popular solutions:
+Release PR fills a unique niche in the automated release ecosystem:
+it is **simple**, **reliable** and **language agnostic**.
+It does just one thing and does it well!
+Here's how it compares to other popular solutions:
 
 #### 📊 Feature Comparison
 
@@ -360,91 +311,3 @@ other popular solutions:
 | **Manual Version Override** | ✅ Edit PR title      | ✅ Complex config         | ✅ PR commands         |
 | **Race Condition Handling** | ✅ Automatic          | ⚠️ Issues reported        | ✅ Concurrency control |
 | **Zero-config Setup**       | ✅ Nearly             | ❌ Complex                | ✅ Yes                 |
-
-#### 🎯 Strengths & Trade-offs
-
-##### **Release PR** (This project)
-
-**✅ Strengths:**
-
-- **Simplicity**: Easiest to set up and understand
-- **Reliability**: Fewer moving parts = fewer bugs
-- **Language Agnostic**: Works with any language via `version_cmd`
-- **Robust Race Condition Handling**: Prevents incorrect releases
-- **Transparent Logic**: Clear, debuggable workflow
-
-**⚠️ Limitations:**
-
-- No built-in monorepo support
-- No registry publishing (handled by user workflows)
-- Limited `version_cmd` flexibility
-- Newer project (less battle-tested)
-
-##### **Google Release Please**
-
-**✅ Strengths:**
-
-- **Feature Rich**: Maximum capabilities
-- **Multi-language**: 20+ languages supported out-of-the-box
-- **Enterprise Ready**: Used by Google and major projects
-- **Monorepo Support**: Excellent workspace handling
-
-**⚠️ Limitations:**
-
-- **Complexity**: Steep learning curve and setup
-- **Reliability Issues**: Many [reported
-  problems](https://github.com/googleapis/release-please/issues) with large files, performance
-- **Over-engineering**: Can be overkill for simple projects
-- **Debugging Difficulty**: Complex internal logic
-
-##### **Rust release-pr**
-
-**✅ Strengths:**
-
-- **Perfect Rust Integration**: Native Cargo.toml handling
-- **Semver Checking**: Automatic breaking change detection
-- **Performance**: Rust binary faster than Node.js alternatives
-- **Registry Publishing**: Built-in crates.io support
-
-**⚠️ Limitations:**
-
-- **Rust Only**: Cannot be used for other languages
-- **Multi-package Complexity**: Issues with [large
-  workspaces](https://github.com/MarcoIeni/release-pr/discussions/1019)
-- **Commit Ambiguity**: Struggles with cross-package commits
-
-#### 🏆 When to Choose What
-
-**Choose Release PR when:**
-
-- ✅ You want **simplicity and reliability** over features
-- ✅ Working with **any programming language**
-- ✅ Need **transparent, debuggable** release process
-- ✅ Want **minimal maintenance overhead**
-- ✅ Have **single-package repositories**
-
-**Choose Release Please when:**
-
-- ✅ You need **enterprise-grade features**
-- ✅ Working with **monorepos** or **multiple languages**
-- ✅ Require **built-in registry publishing**
-- ✅ Have **complex release requirements**
-- ✅ Can invest time in **setup and maintenance**
-
-**Choose release-pr when:**
-
-- ✅ Building **Rust projects exclusively**
-- ✅ Need **automatic semver checking**
-- ✅ Want **crates.io publishing** built-in
-- ✅ Working with **Cargo workspaces**
-
-#### 💡 Release PR's Unique Position
-
-Release PR occupies the **"simple and reliable"** niche:
-
-- **Not the most feature-rich** (that's Release Please)
-- **Not the most language-specific** (that's release-pr for Rust)
-- **But the most straightforward and dependable** for general use
-
-This makes Release PR ideal for teams who want automated releases without the complexity
-overhead of more ambitious tools.
