@@ -58,6 +58,7 @@ jobs:
       target_branch: ${{ steps.config.outputs.target_branch }}
       action: ${{ steps.action.outputs.action }}
     env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       COMMIT_PREFIX: ${{ inputs.commit_prefix }}
       PR_BRANCH: ${{ inputs.pr_branch }}
       TARGET_BRANCH: ${{ inputs.target_branch || github.event.repository.default_branch }}
@@ -83,7 +84,7 @@ jobs:
         with:
           install_args: 'gh'
         env:
-          GITHUB_TOKEN: ${{ github.token }} # Increase GitHub API rate limits.
+          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }} # Increase GitHub API rate limits.
       - run: mise use -g gh
 
       - name: Route event to suitable workflow
@@ -180,6 +181,8 @@ jobs:
       pr_branch: ${{ needs.setup.outputs.pr_branch }}
       target_branch: ${{ needs.setup.outputs.target_branch }}
       version_cmd: ${{ inputs.version_cmd }}
+    secrets:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   set-version:
     needs: [setup]
@@ -190,6 +193,8 @@ jobs:
       pr_branch: ${{ needs.setup.outputs.pr_branch }}
       target_branch: ${{ needs.setup.outputs.target_branch }}
       version_cmd: ${{ inputs.version_cmd }}
+    secrets:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   release:
     needs: [setup]
@@ -200,3 +205,5 @@ jobs:
       pr_branch: ${{ needs.setup.outputs.pr_branch }}
       target_branch: ${{ needs.setup.outputs.target_branch }}
       version_cmd: ${{ inputs.version_cmd }}
+    secrets:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

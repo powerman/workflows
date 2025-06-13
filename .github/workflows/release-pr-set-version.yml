@@ -43,6 +43,7 @@ jobs:
       version: ${{ steps.set-version.outputs.version }}
       changelog: ${{ steps.set-version.outputs.changelog }}
     env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       COMMIT_PREFIX: ${{ inputs.commit_prefix }}
       PR_BRANCH: ${{ inputs.pr_branch }}
       TARGET_BRANCH: ${{ inputs.target_branch }}
@@ -52,28 +53,30 @@ jobs:
         with:
           fetch-depth: 0 # For git-cliff.
           ref: ${{ env.PR_BRANCH }}
+          token: ${{ env.GITHUB_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
 
       - name: Enable `git push` when `act` is run without `--no-skip-checkout`
         if: ${{ env.ACT }}
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
         run: git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
       - uses: jdx/mise-action@v2
         with:
           install_args: 'gh git-cliff'
         env:
-          GITHUB_TOKEN: ${{ github.token }} # Increase GitHub API rate limits.
+          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }} # Increase GitHub API rate limits.
       - run: mise use -g gh git-cliff
 
       - uses: fregante/setup-git-user@v2
+        env:
+          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
 
       - name: Update release-pr branch with new version
         id: set-version
         shell: bash
         env:
           GITHUB_REPO: ${{ github.repository }} # Used by git-cliff.
-          GITHUB_TOKEN: ${{ github.token }} # Used by gh.
           PR_TITLE: ${{ github.event.pull_request.title }}
           PR_NUMBER: ${{ github.event.number }}
         run: |
