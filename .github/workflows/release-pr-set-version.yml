@@ -90,7 +90,7 @@ jobs:
           test -n "$VERSION" || {
             echo "::error::Failed to extract version from PR title: '$PR_TITLE'"
             echo "::notice::Expected format: '$COMMIT_PREFIX v1.2.3' (version may be without 'v' prefix)"
-            sleep 1  # Give time for output to flush.
+            sleep 3  # Give time for output to flush.
             exit 1
           }
           VERSION="v${VERSION#v}"
@@ -122,7 +122,6 @@ jobs:
             echo "::notice::Normalized title for release-pr PR #$PR_NUMBER"
           else
             echo "::notice::No changes needed for release-pr PR #$PR_NUMBER"
-            sleep 1  # Give time for output to flush.
             exit 0
           fi
 
