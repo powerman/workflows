@@ -101,6 +101,7 @@ jobs:
           test -n "$VERSION" || {
             echo "::error::Failed to extract version from release message: '$release_msg'"
             echo "::notice::Expected format: '$COMMIT_PREFIX v1.2.3' (version may be without 'v' prefix)"
+            sleep 1  # Give time for output to flush.
             exit 1
           }
 
@@ -118,6 +119,7 @@ jobs:
           git-cliff --tag "$VERSION" -o CHANGELOG.md
           if git diff --quiet -- CHANGELOG.md; then
             echo "::notice::No race condition detected - proceeding with release"
+            sleep 1  # Give time for output to flush.
             exit 0
           fi
 
@@ -145,6 +147,7 @@ jobs:
             echo "::notice::Found existing release PR #$pr_number"
           fi
 
+          sleep 1  # Give time for output to flush.
           exit 1
 
       - name: Create and push release tag
