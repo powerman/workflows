@@ -44,7 +44,7 @@ on:
       TOKEN:
         description: 'Token to use for GitHub API requests.'
         required: false
-        
+
 concurrency:
   group: release-pr
 
