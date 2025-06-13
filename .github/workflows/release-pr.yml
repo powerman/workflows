@@ -121,7 +121,7 @@ jobs:
           # Action type: opened, closed, edited, …
           EV_PR_ACTION: ${{ github.event.action }}
           # Object with changes to the PR title if the action was `edited`.
-          EV_PR_CHANGES_TITLE: ${{ github.event.changes.title }}
+          EV_PR_CHANGES_TITLE: ${{ github.event.changes && github.event.changes.title }}
           # The owner and repository name of PR source branch.
           EV_PR_HEAD_REPOSITORY: ${{ github.event.pull_request.head.repo.full_name }}
         run: |
