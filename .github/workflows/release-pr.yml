@@ -40,6 +40,10 @@ on:
       changelog:
         description: 'Next (prepared-pr, set-version) or current (released) version changelog'
         value: ${{ jobs.prepare.outputs.changelog || jobs.set-version.outputs.changelog || jobs.release.outputs.changelog }}
+    secrets:
+      GITHUB_TOKEN:
+        description: 'Token to use for GitHub API requests.'
+        required: true
 
 concurrency:
   group: release-pr
