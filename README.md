@@ -71,8 +71,9 @@ To solve this, you can provide an alternative token for release workflow.
     and **Repository permissions** "Contents" and "Pull requests" both set to "Read and write".
 2.  Add this token as a repository secret named `RELEASE_TOKEN` in
     **Settings → Secrets and variables → Actions**.
-3.  Add `env.GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}` to your workflow
-    and pass it to all reusable workflows and actions as shown in the example below.
+3.  In your workflow, pass the `RELEASE_TOKEN` to the `release-pr.yml` workflow via the `TOKEN`
+    secret. If you have other jobs that need this token, you can set a workflow-level
+    `env` variable for convenience. See the examples below.
 
 #### 3. Create Release Workflow
 
@@ -91,28 +92,22 @@ permissions:
   pull-requests: write # To create/update PR from release_pr branch.
 
 env:
-  GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+  GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
 
 jobs:
   release-pr:
     uses: powerman/workflows/.github/workflows/release-pr.yml@main
     secrets:
-      GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+      TOKEN: ${{ secrets.RELEASE_TOKEN }}
     # with:
     #   target_branch: 'main'                 # Default: repository default branch
     #   pr_branch: 'release-pr'               # Default: 'release-pr'
     #   commit_prefix: 'chore: release'       # Default: 'chore: release'
     #   version_cmd: 'echo "$RELEASE_PR_VERSION" >.my-version'  # Optional
 
-  # Optional: Add your own build/upload steps after release.
-  build-and-upload:
-    needs: [release-pr]
-    if: ${{ needs.release-pr.outputs.result == 'released' }}
-    # ... your build steps
-
   # Mark release as non-draft and latest.
   finalize:
-    needs: [release-pr, build-and-upload]
+    needs: [release-pr]
     if: ${{ needs.release-pr.outputs.result == 'released' }}
     permissions:
       contents: write # To update the GitHub release.
@@ -127,8 +122,6 @@ jobs:
           draft: false
           make_latest: true
           token: ${{ env.GITHUB_TOKEN }}
-        env:
-          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
 ```
 
 #### 4. Configure Changelog
@@ -165,6 +158,10 @@ Release PR should be opened automatically.
 - `result`: Action taken - `'prepared-pr'`, `'set-version'`, `'released'`, or empty.
 - `version`: Version that was processed.
 - `changelog`: Changelog for the version.
+
+**Secrets:**
+
+- `TOKEN`: Token to use for authentication. Optional, uses `GITHUB_TOKEN` by default.
 
 **Triggers:**
 
@@ -204,13 +201,13 @@ permissions:
   id-token: write # For cosign signing.
 
 env:
-  GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+  GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
 
 jobs:
   release-pr:
     uses: powerman/workflows/.github/workflows/release-pr.yml@main
     secrets:
-      GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+      TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
   build-and-upload:
     needs: [release-pr]

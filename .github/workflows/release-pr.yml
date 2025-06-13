@@ -12,7 +12,7 @@ on:
         description: 'Technical branch for release PRs'
         required: false
         type: string
-        default: release-pr
+        default: 'release-pr'
       target_branch:
         description: 'Target branch for releases'
         required: false # Uses repo default branch by default.
@@ -41,10 +41,10 @@ on:
         description: 'Next (prepared-pr, set-version) or current (released) version changelog'
         value: ${{ jobs.prepare.outputs.changelog || jobs.set-version.outputs.changelog || jobs.release.outputs.changelog }}
     secrets:
-      GITHUB_TOKEN:
+      TOKEN:
         description: 'Token to use for GitHub API requests.'
-        required: true
-
+        required: false
+        
 concurrency:
   group: release-pr
 
@@ -62,7 +62,7 @@ jobs:
       target_branch: ${{ steps.config.outputs.target_branch }}
       action: ${{ steps.action.outputs.action }}
     env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.TOKEN || secrets.GITHUB_TOKEN }}
       COMMIT_PREFIX: ${{ inputs.commit_prefix }}
       PR_BRANCH: ${{ inputs.pr_branch }}
       TARGET_BRANCH: ${{ inputs.target_branch || github.event.repository.default_branch }}
@@ -186,7 +186,7 @@ jobs:
       target_branch: ${{ needs.setup.outputs.target_branch }}
       version_cmd: ${{ inputs.version_cmd }}
     secrets:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TOKEN: ${{ secrets.TOKEN || secrets.GITHUB_TOKEN }}
 
   set-version:
     needs: [setup]
@@ -198,7 +198,7 @@ jobs:
       target_branch: ${{ needs.setup.outputs.target_branch }}
       version_cmd: ${{ inputs.version_cmd }}
     secrets:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TOKEN: ${{ secrets.TOKEN || secrets.GITHUB_TOKEN }}
 
   release:
     needs: [setup]
@@ -210,4 +210,4 @@ jobs:
       target_branch: ${{ needs.setup.outputs.target_branch }}
       version_cmd: ${{ inputs.version_cmd }}
     secrets:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TOKEN: ${{ secrets.TOKEN || secrets.GITHUB_TOKEN }}

@@ -10,13 +10,13 @@ permissions:
   pull-requests: write # To create/update PR from release_pr branch.
 
 env:
-  GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+  GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN || secrets.GITHUB_TOKEN }}
 
 jobs:
   release-pr:
     uses: ./.github/workflows/release-pr.yml
     secrets:
-      GITHUB_TOKEN: ${{ secrets.RELEASE_TOKEN || github.token }}
+      TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
   finalize:
     needs: [release-pr]

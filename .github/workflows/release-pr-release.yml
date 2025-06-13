@@ -29,6 +29,10 @@ on:
       changelog:
         description: 'Current version changelog'
         value: ${{ jobs.main.outputs.changelog }}
+    secrets:
+      TOKEN:
+        description: 'Token to use for GitHub API requests.'
+        required: true
 
 permissions:
   contents: write # To create a release and a tag OR release_pr branch on race condition.
@@ -43,7 +47,7 @@ jobs:
       version: ${{ steps.vars.outputs.version }}
       changelog: ${{ steps.vars.outputs.changelog }}
     env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.TOKEN }}
       COMMIT_PREFIX: ${{ inputs.commit_prefix }}
       PR_BRANCH: ${{ inputs.pr_branch }}
       TARGET_BRANCH: ${{ inputs.target_branch }}
