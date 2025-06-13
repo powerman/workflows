@@ -29,6 +29,10 @@ on:
       changelog:
         description: 'Next version changelog'
         value: ${{ jobs.main.outputs.changelog }}
+    secrets:
+      TOKEN:
+        description: 'Token to use for GitHub API requests.'
+        required: true
 
 permissions:
   contents: write # To update release_pr branch.
@@ -43,7 +47,7 @@ jobs:
       version: ${{ steps.set-version.outputs.version }}
       changelog: ${{ steps.set-version.outputs.changelog }}
     env:
-      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.TOKEN }}
       COMMIT_PREFIX: ${{ inputs.commit_prefix }}
       PR_BRANCH: ${{ inputs.pr_branch }}
       TARGET_BRANCH: ${{ inputs.target_branch }}
