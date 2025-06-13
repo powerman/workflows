@@ -89,7 +89,7 @@ jobs:
             test -n "$pr_version" || {
               echo "::error::Failed to extract version from PR title: '$pr_title'"
               echo "::notice::Expected format: '$COMMIT_PREFIX v1.2.3' (version may be without 'v' prefix)"
-              sleep 1  # Give time for output to flush.
+              sleep 3  # Give time for output to flush.
               exit 1
             }
             semver_ge() {
