@@ -5,6 +5,24 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] - 2025-06-14
+
+### 🔔 Changed
+
+- Improve annotations and job names by @powerman in [#22]
+- Provide default cliff.toml by @powerman in [#27]
+
+### 📚 Documentation
+
+- **(README)** Add hints how to manage CHANGELOG.md by @powerman in [#28]
+- Clarify version_cmd environment by @powerman in [#24]
+
+[0.3.0]: https://github.com/powerman/workflows/compare/v0.2.0..v0.3.0
+[#22]: https://github.com/powerman/workflows/pull/22
+[#24]: https://github.com/powerman/workflows/pull/24
+[#27]: https://github.com/powerman/workflows/pull/27
+[#28]: https://github.com/powerman/workflows/pull/28
+
 ## [0.2.0] - 2025-06-14
 
 ### 🚀 Added
