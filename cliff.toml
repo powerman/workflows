@@ -90,6 +90,9 @@ body = """
     {%- endif -%}
 {%- endfor -%}
 
+{#- TEMPORARY DISABLED because of unreliable is_first_time flag:
+    https://github.com/orhun/git-cliff/issues/1096#issuecomment-2972964855
+
 {%- set contributors = github.contributors | filter(attribute="is_first_time", value=true) -%}
 {%- if contributors | length != 0 %}
     ### New Contributors
@@ -101,6 +104,8 @@ body = """
             {%- endif %}
     {% endfor -%}
 {%- endif -%}
+
+-#}
 
 {% if version %}
     [{{ version | trim_start_matches(pat="v") }}]: \
