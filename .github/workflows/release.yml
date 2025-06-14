@@ -17,7 +17,8 @@ jobs:
     uses: ./.github/workflows/release-pr.yml
     with:
       version_cmd: |
-        sed -i -E "s#(uses:\s+powerman/workflows/\S+@)(\S+)#\1$RELEASE_PR_VERSION#g" README.md
+        echo "$RELEASE_PR_VERSION" | grep -q '[+-]' ||
+          sed -i -E "s#(uses:\s+powerman/workflows/\S+@)(\S+)#\1$RELEASE_PR_VERSION#g" README.md
     secrets:
       TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
