@@ -1,6 +1,0 @@
-paths:
-  .github/workflows/**/*.{yml,yaml}:
-    ignore:
-      # False positive: secrets.GITHUB_TOKEN is always available.
-      # https://github.com/rhysd/actionlint/issues/87#issuecomment-2964450217
-      - 'secret "GITHUB_TOKEN" is not defined in ".+" reusable workflow'
