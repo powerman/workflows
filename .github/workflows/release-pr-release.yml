@@ -97,10 +97,10 @@ jobs:
             pr_number=$(echo "$release_msg" | grep -oP '^Merge pull request #\K[0-9]+')
             release_msg=$(gh pr view "$pr_number" --json title --jq '.title')
           fi
-          VERSION=$(echo "$release_msg" | grep -oP "^\Q${COMMIT_PREFIX}\E\s+\Kv?[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?")
+          VERSION=$(echo "$release_msg" | grep -oP "^\Q${COMMIT_PREFIX}\E\s+\Kv?[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?" || true)
           test -n "$VERSION" || {
-            echo "Failed to extract version from release message: '$release_msg'"
-            echo "Expected format: '$COMMIT_PREFIX v1.2.3' (version may be without 'v' prefix)"
+            echo "::error::Failed to extract version from release message: '$release_msg'"
+            echo "::notice::Expected format: '$COMMIT_PREFIX v1.2.3' (version may be without 'v' prefix)"
             exit 1
           }
 
@@ -140,9 +140,9 @@ jobs:
             git push origin "$PR_BRANCH" --force
 
             gh pr create --head "$PR_BRANCH" --base "$TARGET_BRANCH" --title "$COMMIT_MSG" --body "$CHANGELOG"
-            echo "Created new release PR due to race condition"
+            echo "::notice::Created new release PR due to race condition"
           else
-            echo "Found existing release PR #$pr_number"
+            echo "::notice::Found existing release PR #$pr_number"
           fi
 
           exit 1
