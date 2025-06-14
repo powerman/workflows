@@ -233,7 +233,7 @@ filter_commits = false
 skip_tags = 'v0.1.0'
 
 # Ignore processing the matched tags (but include ignored commits into the next tag).
-# ignore_tags = '-'
+ignore_tags = '-'
 
 # Counting in (an inverted version of ignore_tags) the matched tags in the final result.
 # count_tags = '-beta'
