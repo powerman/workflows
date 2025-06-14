@@ -91,6 +91,7 @@ jobs:
           if [ -z "$VERSION" ]; then
             echo "Failed to extract version from PR title: '$PR_TITLE'"
             echo "Expected format: '$COMMIT_PREFIX v1.2.3' (version may be without 'v' prefix)"
+            head -c 10000 /dev/zero # Flush output.
             exit 1
           fi
           VERSION="v${VERSION#v}"
