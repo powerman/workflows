@@ -75,6 +75,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
 
+      - name: Set git-cliff command
+        shell: bash
+        run: |
+          if [ -f "cliff.toml" ]; then
+            echo "GIT_CLIFF=git-cliff" >> "$GITHUB_ENV"
+          else
+            echo "GIT_CLIFF=git-cliff --config-url https://github.com/powerman/workflows/blob/main/cliff.toml?raw=true" >> "$GITHUB_ENV"
+          fi
+
       # Race condition handling:
       # 1. Extract version from PR title (merge commit) or current commit (squash merge).
       # 2. Regenerate CHANGELOG.md with this version.
@@ -106,7 +115,7 @@ jobs:
 
           VERSION="v${VERSION#v}"
           COMMIT_MSG="$COMMIT_PREFIX $VERSION"
-          CHANGELOG=$(git-cliff --tag "$VERSION" --unreleased --strip all | tail -n +3)
+          CHANGELOG=$($GIT_CLIFF --tag "$VERSION" --unreleased --strip all | tail -n +3)
           {
             echo "VERSION=$VERSION"
             echo "CHANGELOG<<EOF"
@@ -115,7 +124,7 @@ jobs:
           } >> "$GITHUB_ENV"
 
           # Check for race condition
-          git-cliff --tag "$VERSION" -o CHANGELOG.md
+          $GIT_CLIFF --tag "$VERSION" -o CHANGELOG.md
           if git diff --quiet -- CHANGELOG.md; then
             echo "::notice::No race condition detected - proceeding with release"
             exit 0
@@ -138,7 +147,7 @@ jobs:
               echo "::endgroup::"
             fi
 
-            git-cliff --tag "$VERSION" -o CHANGELOG.md
+            $GIT_CLIFF --tag "$VERSION" -o CHANGELOG.md
             git add .
 
             git commit --allow-empty -m "$COMMIT_MSG"

@@ -76,6 +76,15 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
 
+      - name: Set git-cliff command
+        shell: bash
+        run: |
+          if [ -f "cliff.toml" ]; then
+            echo "GIT_CLIFF=git-cliff" >> "$GITHUB_ENV"
+          else
+            echo "GIT_CLIFF=git-cliff --config-url https://github.com/powerman/workflows/blob/main/cliff.toml?raw=true" >> "$GITHUB_ENV"
+          fi
+
       - name: Update release-pr branch with new version
         id: set-version
         shell: bash
@@ -106,13 +115,13 @@ jobs:
               echo "::endgroup::"
             fi
 
-            git-cliff --tag "$VERSION" -o CHANGELOG.md
+            $GIT_CLIFF --tag "$VERSION" -o CHANGELOG.md
             git add .
 
             git commit --amend --allow-empty -m "$COMMIT_MSG"
             git push origin "$PR_BRANCH" --force
 
-            CHANGELOG=$(git-cliff --tag "$VERSION" --unreleased --strip all | tail -n +3)
+            CHANGELOG=$($GIT_CLIFF --tag "$VERSION" --unreleased --strip all | tail -n +3)
             gh pr edit "$PR_NUMBER" --title "$COMMIT_MSG" --body "$CHANGELOG"
             echo "::notice::Updated release-pr branch and PR #$PR_NUMBER with new version"
           elif [ "$PR_TITLE" != "$COMMIT_MSG" ]; then

@@ -38,7 +38,8 @@ be released and what changes will be included.
 
 1. **Single project per repository**: No monorepo support.
 2. **CHANGELOG.md**: Must be in repository root, managed by `git-cliff`.
-3. **git-cliff configuration**: Proper `cliff.toml` configuration required.
+3. **git-cliff configuration**: Proper `cliff.toml` configuration required. If this file
+   is not present in the repository root, a [default configuration] will be used.
 4. **Semantic versioning**: Project must use semver for releases.
 5. **Auto version bump managed by git-cliff**: Project must use (mostly) conventional commits.
 6. **Git tags**: Releases must be tagged with version numbers.
@@ -286,3 +287,4 @@ Here's how it compares to other popular solutions:
 [git-cliff-conf]: https://git-cliff.org/docs/configuration
 [github-trigger-workflow]: https://docs.github.com/en/actions/using-workflows/triggering-a-workflow#triggering-a-workflow-from-a-workflow
 [create-PAT]: https://github.com/settings/personal-access-tokens
+[default configuration]: https://github.com/powerman/workflows/blob/main/cliff.toml
