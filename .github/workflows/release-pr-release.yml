@@ -41,6 +41,10 @@ permissions:
   contents: write # To create a release and a tag OR release_pr branch on race condition.
   pull-requests: write # To create PR from release_pr branch on race condition.
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   release:
     timeout-minutes: 5
@@ -80,7 +84,6 @@ jobs:
           GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
 
       - name: Set git-cliff command
-        shell: bash
         run: |
           if [ -f "cliff.toml" ]; then
             echo "GIT_CLIFF=git-cliff" >> "$GITHUB_ENV"
@@ -98,7 +101,6 @@ jobs:
       #      release-pr-prepare workflow updated release-pr branch.
       # 4. In case of race condition, create new release PR instead of proceeding with release.
       - name: Extract version and check race condition
-        shell: bash
         env:
           GITHUB_REPO: ${{ github.repository }} # Used by git-cliff.
         run: |
@@ -170,7 +172,6 @@ jobs:
           exit 1
 
       - name: Create and push release tag
-        shell: bash
         run: |
           git tag "$VERSION" -m "$CHANGELOG"
           git push origin "$VERSION"
@@ -186,7 +187,6 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
       - name: Set output
-        shell: bash
         id: vars
         run: |
           {

@@ -41,6 +41,10 @@ permissions:
   contents: write # To create/update release_pr branch.
   pull-requests: write # To create/update PR from release_pr branch.
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   prepare-pr:
     timeout-minutes: 5
@@ -80,7 +84,6 @@ jobs:
           GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
 
       - name: Set git-cliff command
-        shell: bash
         run: |
           if [ -f "cliff.toml" ]; then
             echo "GIT_CLIFF=git-cliff" >> "$GITHUB_ENV"
@@ -89,7 +92,6 @@ jobs:
           fi
 
       - name: Determine version and generate changelog
-        shell: bash
         env:
           GITHUB_REPO: ${{ github.repository }} # Used by git-cliff.
         run: |
@@ -130,7 +132,6 @@ jobs:
           } >> "$GITHUB_ENV"
 
       - name: Create or update release-pr branch with CHANGELOG.md
-        shell: bash
         env:
           GITHUB_REPO: ${{ github.repository }} # Used by git-cliff.
         run: |
@@ -151,7 +152,6 @@ jobs:
           git push origin "$PR_BRANCH" --force
 
       - name: Create or update release-pr pull request
-        shell: bash
         run: |
           pr_number=$(gh pr list --state open --head "$PR_BRANCH" --json number --jq '.[0].number')
           if [ -z "$pr_number" ]; then
@@ -163,7 +163,6 @@ jobs:
           fi
 
       - name: Set output
-        shell: bash
         id: vars
         run: |
           {

@@ -41,6 +41,10 @@ permissions:
   contents: write # To update release_pr branch.
   pull-requests: write # To normalize PR title and update PR from release_pr branch.
 
+defaults:
+  run:
+    shell: bash
+
 jobs:
   set-version:
     timeout-minutes: 5
@@ -81,7 +85,6 @@ jobs:
           GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
 
       - name: Set git-cliff command
-        shell: bash
         run: |
           if [ -f "cliff.toml" ]; then
             echo "GIT_CLIFF=git-cliff" >> "$GITHUB_ENV"
@@ -91,7 +94,6 @@ jobs:
 
       - name: Update release-pr branch with new version
         id: set-version
-        shell: bash
         env:
           GITHUB_REPO: ${{ github.repository }} # Used by git-cliff.
           PR_TITLE: ${{ github.event.pull_request.title }}
