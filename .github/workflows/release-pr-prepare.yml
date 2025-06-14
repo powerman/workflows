@@ -85,7 +85,7 @@ jobs:
           # Check if existing PR has a manually set version that should be preserved.
           pr_title=$(gh pr list --state open --head "$PR_BRANCH" --json title --jq '.[0].title')
           if [ -n "$pr_title" ]; then
-            pr_version=$(echo "$pr_title" | grep -oP "^\Q${COMMIT_PREFIX}\E\s+\Kv?[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?")
+            pr_version=$(echo "$pr_title" | grep -oP "^\Q${COMMIT_PREFIX}\E\s+\Kv?[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?" || true)
             test -n "$pr_version" || {
               echo "::error::Failed to extract version from PR title: '$pr_title'"
               echo "::notice::Expected format: '$COMMIT_PREFIX v1.2.3' (version may be without 'v' prefix)"

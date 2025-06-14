@@ -97,7 +97,7 @@ jobs:
             pr_number=$(echo "$release_msg" | grep -oP '^Merge pull request #\K[0-9]+')
             release_msg=$(gh pr view "$pr_number" --json title --jq '.title')
           fi
-          VERSION=$(echo "$release_msg" | grep -oP "^\Q${COMMIT_PREFIX}\E\s+\Kv?[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?")
+          VERSION=$(echo "$release_msg" | grep -oP "^\Q${COMMIT_PREFIX}\E\s+\Kv?[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?" || true)
           test -n "$VERSION" || {
             echo "::error::Failed to extract version from release message: '$release_msg'"
             echo "::notice::Expected format: '$COMMIT_PREFIX v1.2.3' (version may be without 'v' prefix)"
