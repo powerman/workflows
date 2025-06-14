@@ -97,13 +97,13 @@ env:
 jobs:
   release-pr:
     uses: powerman/workflows/.github/workflows/release-pr.yml@main
-    secrets:
-      TOKEN: ${{ secrets.RELEASE_TOKEN }}
     # with:
     #   target_branch: 'main'                 # Default: repository default branch
     #   pr_branch: 'release-pr'               # Default: 'release-pr'
     #   commit_prefix: 'chore: release'       # Default: 'chore: release'
     #   version_cmd: 'echo "$RELEASE_PR_VERSION" >.my-version'  # Optional
+    secrets:
+      TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
   # Mark release as non-draft and latest.
   finalize:
@@ -149,8 +149,8 @@ Release PR should be opened automatically.
   - **Force push**: Branch is force-pushed on updates to maintain single commit
 - `target_branch` (optional): Target branch for releases (default: repository default branch).
 - `version_cmd` (optional): Shell command to update additional files with the version.
-  - **Working directory**: Clean state on release branch.
-  - **Timing**: Before `CHANGELOG.md` generation and commit.
+  - **Working directory**: Clean state on `inputs.pr_branch` branch.
+  - **Timing**: Before `CHANGELOG.md` generation, `git add .` and commit.
   - **Environment variable**: `$RELEASE_PR_VERSION` contains full version (e.g., "v1.2.3").
 
 **Outputs:**
@@ -282,7 +282,6 @@ Here's how it compares to other popular solutions:
 | **Manual Version Override** | ✅ Edit PR title      | ✅ Complex config         | ✅ PR commands         |
 | **Race Condition Handling** | ✅ Automatic          | ⚠️ Issues reported        | ✅ Concurrency control |
 | **Zero-config Setup**       | ✅ Nearly             | ❌ Complex                | ✅ Yes                 |
-
 
 [git-cliff-conf]: https://git-cliff.org/docs/configuration
 [github-trigger-workflow]: https://docs.github.com/en/actions/using-workflows/triggering-a-workflow#triggering-a-workflow-from-a-workflow
