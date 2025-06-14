@@ -75,12 +75,21 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
 
+      - name: Set git-cliff command
+        shell: bash
+        run: |
+          if [ -f "cliff.toml" ]; then
+            echo "GIT_CLIFF=git-cliff" >> "$GITHUB_ENV"
+          else
+            echo "GIT_CLIFF=git-cliff --config-url https://github.com/powerman/workflows/blob/main/cliff.toml?raw=true" >> "$GITHUB_ENV"
+          fi
+
       - name: Determine version and generate changelog
         shell: bash
         env:
           GITHUB_REPO: ${{ github.repository }} # Used by git-cliff.
         run: |
-          VERSION=$(git-cliff --bumped-version --unreleased)
+          VERSION=$($GIT_CLIFF --bumped-version --unreleased)
 
           # Check if existing PR has a manually set version that should be preserved.
           pr_title=$(gh pr list --state open --head "$PR_BRANCH" --json title --jq '.[0].title')
@@ -103,7 +112,7 @@ jobs:
             echo "VERSION=$VERSION"
             echo "COMMIT_MSG=$COMMIT_PREFIX $VERSION"
             echo "CHANGELOG<<EOF"
-            git-cliff --tag "$VERSION" --unreleased --strip all | tail -n +3
+            $GIT_CLIFF --tag "$VERSION" --unreleased --strip all | tail -n +3
             echo "EOF"
           } >> "$GITHUB_ENV"
 
@@ -122,7 +131,7 @@ jobs:
             echo "::endgroup::"
           fi
 
-          git-cliff --tag "$VERSION" -o CHANGELOG.md
+          $GIT_CLIFF --tag "$VERSION" -o CHANGELOG.md
           git add .
 
           git commit --allow-empty -m "$COMMIT_MSG"
