@@ -22,13 +22,13 @@ on:
     outputs:
       result:
         description: 'Result: "set-version" or nothing'
-        value: ${{ jobs.main.outputs.result }}
+        value: ${{ jobs.set-version.outputs.result }}
       version:
         description: 'Next version'
-        value: ${{ jobs.main.outputs.version }}
+        value: ${{ jobs.set-version.outputs.version }}
       changelog:
         description: 'Next version changelog'
-        value: ${{ jobs.main.outputs.changelog }}
+        value: ${{ jobs.set-version.outputs.changelog }}
     secrets:
       TOKEN:
         description: 'Token to use for GitHub API requests.'

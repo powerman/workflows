@@ -33,13 +33,13 @@ on:
         value: ${{ jobs.setup.outputs.target_branch }}
       result:
         description: 'Result: "prepared-pr", "set-version", "released" or nothing'
-        value: ${{ jobs.prepare.outputs.result || jobs.set-version.outputs.result || jobs.release.outputs.result }}
+        value: ${{ jobs.prepare-pr.outputs.result || jobs.set-version.outputs.result || jobs.release.outputs.result }}
       version:
         description: 'Next (prepared-pr, set-version) or current (released) version'
-        value: ${{ jobs.prepare.outputs.version || jobs.set-version.outputs.version || jobs.release.outputs.version }}
+        value: ${{ jobs.prepare-pr.outputs.version || jobs.set-version.outputs.version || jobs.release.outputs.version }}
       changelog:
         description: 'Next (prepared-pr, set-version) or current (released) version changelog'
-        value: ${{ jobs.prepare.outputs.changelog || jobs.set-version.outputs.changelog || jobs.release.outputs.changelog }}
+        value: ${{ jobs.prepare-pr.outputs.changelog || jobs.set-version.outputs.changelog || jobs.release.outputs.changelog }}
     secrets:
       TOKEN:
         description: 'Token to use for GitHub API requests.'
