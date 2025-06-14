@@ -35,6 +35,7 @@ jobs:
           tag_name: ${{ needs.release-pr.outputs.version }}
           body: ${{ needs.release-pr.outputs.changelog }}
           draft: false
+          prerelease: ${{ needs.release-pr.outputs.prerelease }}
           make_latest: true
           token: ${{ env.GITHUB_TOKEN }}
         env:

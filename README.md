@@ -20,19 +20,23 @@ be released and what changes will be included.
 - **Manual Version Override**: Edit PR title to set custom version.
 - **Race Condition Handling**: Prevents incorrect releases when conflicts occur.
 - **Draft Release Creation**: Creates GitHub releases with a proper changelog.
+- **Pre-release Version Support**: GitHub Release is marked as a prerelease
+  for pre-release versions.
 
 #### How It Works
 
-1. **Auto PR Creation**: When commits are pushed to the main branch, a "release PR" is
-   automatically created or updated.
-2. **Version Display**: PR title shows the next release version (calculated by git-cliff or
-   manually set).
+1. **Auto PR Creation**: When commits are pushed to the target branch,
+   a "release PR" is automatically created or updated.
+2. **Version Display**: PR title shows the next release version
+   (calculated by git-cliff or manually set).
 3. **Changelog Preview**: PR description contains the full changelog for the upcoming release.
-4. **Manual Version Control**: Edit the PR title to override the version; the changelog updates
-   automatically.
+4. **Manual Version Control**: Edit the PR title to override the version;
+   the changelog updates automatically.
+   If you set a prerelease version it will be used as-is
+   and the release will be marked as a prerelease.
 5. **Release**: Merge the PR to create a new release.
-6. **Race Condition Protection**: If changes occur during merge, a new PR is created instead
-   of releasing.
+6. **Race Condition Protection**: If changes occur during merge,
+   a new PR is created instead of releasing.
 
 ### Project Requirements
 
@@ -121,6 +125,7 @@ jobs:
           tag_name: ${{ needs.release-pr.outputs.version }}
           body: ${{ needs.release-pr.outputs.changelog }}
           draft: false
+          prerelease: ${{ needs.release-pr.outputs.prerelease }}
           make_latest: true
           token: ${{ env.GITHUB_TOKEN }}
 ```
@@ -158,7 +163,8 @@ Release PR should be opened automatically.
 **Outputs:**
 
 - `result`: Action taken - `'prepared-pr'`, `'set-version'`, `'released'`, or empty.
-- `version`: Version that was processed.
+- `version`: Next (prepared-pr, set-version) or current (released) version.
+- `prerelease`: Is this version a prerelease (`true` or `false`).
 - `changelog`: Changelog for the version.
 
 **Secrets:**
@@ -245,6 +251,7 @@ jobs:
           body: ${{ needs.release-pr.outputs.changelog }}
           files: ./dist/*
           draft: false
+          prerelease: ${{ needs.release-pr.outputs.prerelease }}
           make_latest: true
           token: ${{ env.GITHUB_TOKEN }}
 ```

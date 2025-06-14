@@ -26,6 +26,9 @@ on:
       version:
         description: 'Current version'
         value: ${{ jobs.release.outputs.version }}
+      prerelease:
+        description: 'Is this version a prerelease (true/false)'
+        value: ${{ jobs.release.outputs.prerelease }}
       changelog:
         description: 'Current version changelog'
         value: ${{ jobs.release.outputs.changelog }}
@@ -45,6 +48,7 @@ jobs:
     outputs:
       result: ${{ steps.vars.outputs.result }}
       version: ${{ steps.vars.outputs.version }}
+      prerelease: ${{ steps.vars.outputs.prerelease }}
       changelog: ${{ steps.vars.outputs.changelog }}
     env:
       GITHUB_TOKEN: ${{ secrets.TOKEN }}
@@ -112,8 +116,11 @@ jobs:
             echo "::notice::Expected format: '$COMMIT_PREFIX v1.2.3' (version may be without 'v' prefix)"
             exit 1
           }
-
           VERSION="v${VERSION#v}"
+          PRERELEASE=false
+          if echo "$VERSION" | grep -q '[-]'; then
+            PRERELEASE=true
+          fi
           COMMIT_MSG="$COMMIT_PREFIX $VERSION"
           CHANGELOG=$($GIT_CLIFF --tag "$VERSION" --unreleased --strip all | tail -n +3)
           {
@@ -121,6 +128,7 @@ jobs:
             echo "CHANGELOG<<EOF"
             echo "$CHANGELOG"
             echo "EOF"
+            echo "PRERELEASE=$PRERELEASE"
           } >> "$GITHUB_ENV"
 
           # Check for race condition
@@ -173,6 +181,7 @@ jobs:
           tag_name: ${{ env.VERSION }}
           body: ${{ env.CHANGELOG }}
           draft: true
+          prerelease: ${{ env.PRERELEASE }}
           token: ${{ env.GITHUB_TOKEN }}
         env:
           GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
@@ -183,6 +192,7 @@ jobs:
           {
             echo "result=released"
             echo "version=$VERSION"
+            echo "prerelease=$PRERELEASE"
             echo "changelog<<EOF"
             echo "$CHANGELOG"
             echo "EOF"

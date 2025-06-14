@@ -26,6 +26,9 @@ on:
       version:
         description: 'Next version'
         value: ${{ jobs.prepare-pr.outputs.version }}
+      prerelease:
+        description: 'Is this version a prerelease (true/false)'
+        value: ${{ jobs.prepare-pr.outputs.prerelease }}
       changelog:
         description: 'Next version changelog'
         value: ${{ jobs.prepare-pr.outputs.changelog }}
@@ -45,6 +48,7 @@ jobs:
     outputs:
       result: ${{ steps.vars.outputs.result }}
       version: ${{ steps.vars.outputs.version }}
+      prerelease: ${{ steps.vars.outputs.prerelease }}
       changelog: ${{ steps.vars.outputs.changelog }}
     env:
       GITHUB_TOKEN: ${{ secrets.TOKEN }}
@@ -90,6 +94,7 @@ jobs:
           GITHUB_REPO: ${{ github.repository }} # Used by git-cliff.
         run: |
           VERSION=$($GIT_CLIFF --bumped-version --unreleased)
+          PRERELEASE=false
 
           # Check if existing PR has a manually set version that should be preserved.
           pr_title=$(gh pr list --state open --head "$PR_BRANCH" --json title --jq '.[0].title')
@@ -100,16 +105,24 @@ jobs:
               echo "::notice::Expected format: '$COMMIT_PREFIX v1.2.3' (version may be without 'v' prefix)"
               exit 1
             }
+
             semver_ge() {
               python3 -c 'import sys, packaging.version as v; exit(v.Version(sys.argv[1]) < v.Version(sys.argv[2]))' "$1" "$2"
             }
-            if semver_ge "${pr_version}" "${VERSION}"; then
+            if echo "$pr_version" | grep -q '[-+]'; then
               VERSION="v${pr_version#v}"
+            elif semver_ge "${pr_version}" "${VERSION}"; then
+              VERSION="v${pr_version#v}"
+            fi
+
+            if echo "$pr_version" | grep -q '[-]'; then
+              PRERELEASE=true
             fi
           fi
 
           {
             echo "VERSION=$VERSION"
+            echo "PRERELEASE=$PRERELEASE"
             echo "COMMIT_MSG=$COMMIT_PREFIX $VERSION"
             echo "CHANGELOG<<EOF"
             $GIT_CLIFF --tag "$VERSION" --unreleased --strip all | tail -n +3
@@ -159,4 +172,5 @@ jobs:
             echo "changelog<<EOF"
             echo "$CHANGELOG"
             echo "EOF"
+            echo "prerelease=$PRERELEASE"
           } >> "$GITHUB_OUTPUT"
