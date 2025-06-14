@@ -70,13 +70,15 @@ jobs:
       - name: Release PR configuration
         id: config
         run: |
-          echo
-          echo "Release PR configuration:"
-          echo
-          echo "  commit_prefix = '$COMMIT_PREFIX'"
-          echo "  pr_branch     = '$PR_BRANCH'"
-          echo "  target_branch = '$TARGET_BRANCH'"
-          echo
+          {
+            echo "# Release PR configuration"
+            echo
+            echo "| inputs | value |"
+            echo "| - | - |"
+            echo "| commit_prefix | \`'$COMMIT_PREFIX'\` |"
+            echo "| pr_branch | \`'$PR_BRANCH'\` |"
+            echo "| target_branch | \`'$TARGET_BRANCH'\` |"
+          } >> "$GITHUB_STEP_SUMMARY"
 
           {
             echo "commit_prefix=$COMMIT_PREFIX"
@@ -128,11 +130,11 @@ jobs:
           if [ "$EVENT_NAME" = "push" ]; then
 
             if [ "$(gh api "repos/$GITHUB_REPOSITORY" --jq '.fork')" = "true" ]; then
-              echo "Skip $EVENT_NAME: no releases in repo forks"
+              echo "::notice::Skip $EVENT_NAME: no releases in repo forks"
               exit 0
             fi
             if [ "$GITHUB_REF" != "refs/heads/$TARGET_BRANCH" ]; then
-              echo "Skip $EVENT_NAME: target branch is not $TARGET_BRANCH"
+              echo "::notice::Skip $EVENT_NAME: target branch is not $TARGET_BRANCH"
               exit 0
             fi
             if echo "$EV_PUSH_HEAD_MESSAGE" | grep -qP "^\Q${COMMIT_PREFIX}\E\s"; then
@@ -149,23 +151,23 @@ jobs:
           elif [ "$EVENT_NAME" = "pull_request" ]; then
 
             if [ "$GITHUB_BASE_REF" != "$TARGET_BRANCH" ]; then
-              echo "Skip $EVENT_NAME: PR base branch is not $TARGET_BRANCH"
+              echo "::notice::Skip $EVENT_NAME: PR base branch is not $TARGET_BRANCH"
               exit 0
             fi
             if [ "$GITHUB_HEAD_REF" != "$PR_BRANCH" ]; then
-              echo "Skip $EVENT_NAME: PR source branch is not $PR_BRANCH"
+              echo "::notice::Skip $EVENT_NAME: PR source branch is not $PR_BRANCH"
               exit 0
             fi
             if [ "$EV_PR_HEAD_REPOSITORY" != "$GITHUB_REPOSITORY" ]; then
-              echo "Skip $EVENT_NAME: PR is from a repo fork"
+              echo "::notice::Skip $EVENT_NAME: PR is from a repo fork"
               exit 0
             fi
             if [ "$EV_PR_ACTION" != "edited" ]; then
-              echo "Skip $EVENT_NAME: PR was not edited"
+              echo "::notice::Skip $EVENT_NAME: PR was not edited"
               exit 0
             fi
             if [ -z "$EV_PR_CHANGES_TITLE" ]; then
-              echo "Skip $EVENT_NAME: PR title was not changed"
+              echo "::notice::Skip $EVENT_NAME: PR title was not changed"
               exit 0
             fi
             ACTION=set-version
@@ -176,7 +178,7 @@ jobs:
 
           echo "action=$ACTION" >> "$GITHUB_OUTPUT"
 
-  prepare:
+  prepare-pr:
     needs: [setup]
     if: ${{ needs.setup.outputs.action == 'prepare' }}
     uses: ./.github/workflows/release-pr-prepare.yml

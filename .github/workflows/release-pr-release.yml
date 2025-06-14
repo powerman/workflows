@@ -39,7 +39,7 @@ permissions:
   pull-requests: write # To create PR from release_pr branch on race condition.
 
 jobs:
-  main:
+  release:
     timeout-minutes: 5
     runs-on: ubuntu-latest
     outputs:

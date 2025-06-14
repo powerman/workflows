@@ -39,7 +39,7 @@ permissions:
   pull-requests: write # To normalize PR title and update PR from release_pr branch.
 
 jobs:
-  main:
+  set-version:
     timeout-minutes: 5
     runs-on: ubuntu-latest
     outputs:
