@@ -8,8 +8,8 @@
 # - Add text for specific released version: use `body=`.
 
 [bump]
-# Feature bump patch for 0.x.y version or minor otherwise.
-features_always_bump_minor = false
+# Feature bump minor for 0.x.y version.
+features_always_bump_minor = true
 
 # Breaking bump minor for 0.x.y or major otherwise.
 breaking_always_bump_major = false
