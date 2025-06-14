@@ -22,13 +22,13 @@ on:
     outputs:
       result:
         description: 'Result: "prepared-pr" or nothing'
-        value: ${{ jobs.main.outputs.result }}
+        value: ${{ jobs.prepare-pr.outputs.result }}
       version:
         description: 'Next version'
-        value: ${{ jobs.main.outputs.version }}
+        value: ${{ jobs.prepare-pr.outputs.version }}
       changelog:
         description: 'Next version changelog'
-        value: ${{ jobs.main.outputs.changelog }}
+        value: ${{ jobs.prepare-pr.outputs.changelog }}
     secrets:
       TOKEN:
         description: 'Token to use for GitHub API requests.'
@@ -39,7 +39,7 @@ permissions:
   pull-requests: write # To create/update PR from release_pr branch.
 
 jobs:
-  main:
+  prepare-pr:
     timeout-minutes: 5
     runs-on: ubuntu-latest
     outputs:
