@@ -37,12 +37,12 @@ on:
       version:
         description: 'Next (prepared-pr, set-version) or current (released) version'
         value: ${{ jobs.prepare-pr.outputs.version || jobs.set-version.outputs.version || jobs.release.outputs.version }}
-      changelog:
-        description: 'Next (prepared-pr, set-version) or current (released) version changelog'
-        value: ${{ jobs.prepare-pr.outputs.changelog || jobs.set-version.outputs.changelog || jobs.release.outputs.changelog }}
       prerelease:
         description: 'Is this version a prerelease (true/false)'
         value: ${{ jobs.prepare-pr.outputs.prerelease || jobs.set-version.outputs.prerelease || jobs.release.outputs.prerelease }}
+      changelog:
+        description: 'Next (prepared-pr, set-version) or current (released) version changelog'
+        value: ${{ jobs.prepare-pr.outputs.changelog || jobs.set-version.outputs.changelog || jobs.release.outputs.changelog }}
     secrets:
       TOKEN:
         description: 'Token to use for GitHub API requests.'
@@ -69,7 +69,7 @@ jobs:
       target_branch: ${{ steps.config.outputs.target_branch }}
       action: ${{ steps.action.outputs.action }}
     env:
-      GITHUB_TOKEN: ${{ secrets.TOKEN || secrets.GITHUB_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.TOKEN || github.token }}
       COMMIT_PREFIX: ${{ inputs.commit_prefix }}
       PR_BRANCH: ${{ inputs.pr_branch }}
       TARGET_BRANCH: ${{ inputs.target_branch || github.event.repository.default_branch }}
@@ -152,7 +152,7 @@ jobs:
             if [ -n "$pr_merge" ]; then
               ACTION=release
             else
-              ACTION=prepare
+              ACTION=prepare-pr
             fi
 
           elif [ "$EVENT_NAME" = "pull_request" ]; then
@@ -187,36 +187,392 @@ jobs:
 
   prepare-pr:
     needs: [setup]
-    if: ${{ needs.setup.outputs.action == 'prepare' }}
-    uses: ./.github/workflows/release-pr-prepare.yml
-    with:
-      commit_prefix: ${{ needs.setup.outputs.commit_prefix }}
-      pr_branch: ${{ needs.setup.outputs.pr_branch }}
-      target_branch: ${{ needs.setup.outputs.target_branch }}
-      version_cmd: ${{ inputs.version_cmd }}
-    secrets:
-      TOKEN: ${{ secrets.TOKEN || secrets.GITHUB_TOKEN }}
+    if: ${{ needs.setup.outputs.action == 'prepare-pr' }}
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    outputs:
+      result: ${{ steps.vars.outputs.result }}
+      version: ${{ steps.vars.outputs.version }}
+      prerelease: ${{ steps.vars.outputs.prerelease }}
+      changelog: ${{ steps.vars.outputs.changelog }}
+    env:
+      GITHUB_TOKEN: ${{ secrets.TOKEN || github.token }}
+      COMMIT_PREFIX: ${{ needs.setup.outputs.commit_prefix }}
+      PR_BRANCH: ${{ needs.setup.outputs.pr_branch }}
+      TARGET_BRANCH: ${{ needs.setup.outputs.target_branch }}
+      VERSION_CMD: ${{ inputs.version_cmd }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # For git-cliff.
+          token: ${{ env.GITHUB_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+
+      - name: Enable `git push` when `act` is run without `--no-skip-checkout`
+        if: ${{ env.ACT }}
+        run: git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+      - uses: jdx/mise-action@v2
+        with:
+          install_args: 'gh git-cliff'
+        env:
+          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }} # Increase GitHub API rate limits.
+      - run: mise use -g gh git-cliff
+
+      - uses: fregante/setup-git-user@v2
+        env:
+          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+
+      - name: Set git-cliff command
+        run: |
+          if [ -f "cliff.toml" ]; then
+            echo "GIT_CLIFF=git-cliff" >> "$GITHUB_ENV"
+          else
+            echo "GIT_CLIFF=git-cliff --config-url https://github.com/powerman/workflows/blob/main/cliff.toml?raw=true" >> "$GITHUB_ENV"
+          fi
+
+      - name: Determine version and generate changelog
+        env:
+          GITHUB_REPO: ${{ github.repository }} # Used by git-cliff.
+        run: |
+          VERSION=$($GIT_CLIFF --bumped-version --unreleased)
+          PRERELEASE=false
+
+          # Check if existing PR has a manually set version that should be preserved.
+          pr_title=$(gh pr list --state open --head "$PR_BRANCH" --json title --jq '.[0].title')
+          if [ -n "$pr_title" ]; then
+            pr_version=$(echo "$pr_title" | grep -oP "^\Q${COMMIT_PREFIX}\E\s+\Kv?[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?" || true)
+            test -n "$pr_version" || {
+              echo "::error::Failed to extract version from PR title: '$pr_title'"
+              echo "::notice::Expected format: '$COMMIT_PREFIX v1.2.3' (version may be without 'v' prefix)"
+              exit 1
+            }
+
+            semver_ge() {
+              python3 -c 'import sys, packaging.version as v; exit(v.Version(sys.argv[1]) < v.Version(sys.argv[2]))' "$1" "$2"
+            }
+            if echo "$pr_version" | grep -q '[-+]'; then
+              VERSION="v${pr_version#v}"
+            elif semver_ge "${pr_version}" "${VERSION}"; then
+              VERSION="v${pr_version#v}"
+            fi
+
+            if echo "$pr_version" | grep -q '[-]'; then
+              PRERELEASE=true
+            fi
+          fi
+
+          {
+            echo "VERSION=$VERSION"
+            echo "PRERELEASE=$PRERELEASE"
+            echo "COMMIT_MSG=$COMMIT_PREFIX $VERSION"
+            echo "CHANGELOG<<EOF"
+            $GIT_CLIFF --tag "$VERSION" --unreleased --strip all | tail -n +3
+            echo "EOF"
+          } >> "$GITHUB_ENV"
+
+      - name: Create or update release-pr branch with CHANGELOG.md
+        env:
+          GITHUB_REPO: ${{ github.repository }} # Used by git-cliff.
+        run: |
+          git checkout -B "$PR_BRANCH"
+
+          # Run custom version command if provided
+          if [ -n "$VERSION_CMD" ]; then
+            echo "::group::Running custom version command"
+            RELEASE_PR_VERSION="$VERSION" \
+              bash -e -o pipefail -c "$VERSION_CMD"
+            echo "::endgroup::"
+          fi
+
+          $GIT_CLIFF --tag "$VERSION" -o CHANGELOG.md
+          git add .
+
+          git commit --allow-empty -m "$COMMIT_MSG"
+          git push origin "$PR_BRANCH" --force
+
+      - name: Create or update release-pr pull request
+        run: |
+          pr_number=$(gh pr list --state open --head "$PR_BRANCH" --json number --jq '.[0].number')
+          if [ -z "$pr_number" ]; then
+            gh pr create --head "$PR_BRANCH" --base "$TARGET_BRANCH" --title "$COMMIT_MSG" --body "$CHANGELOG"
+            echo "::notice::Created new release PR"
+          else
+            gh pr edit "$pr_number" --title "$COMMIT_MSG" --body "$CHANGELOG"
+            echo "::notice::Updated existing release PR #$pr_number"
+          fi
+
+      - name: Set output
+        id: vars
+        run: |
+          {
+            echo "result=prepared-pr"
+            echo "version=$VERSION"
+            echo "changelog<<EOF"
+            echo "$CHANGELOG"
+            echo "EOF"
+            echo "prerelease=$PRERELEASE"
+          } >> "$GITHUB_OUTPUT"
 
   set-version:
     needs: [setup]
     if: ${{ needs.setup.outputs.action == 'set-version' }}
-    uses: ./.github/workflows/release-pr-set-version.yml
-    with:
-      commit_prefix: ${{ needs.setup.outputs.commit_prefix }}
-      pr_branch: ${{ needs.setup.outputs.pr_branch }}
-      target_branch: ${{ needs.setup.outputs.target_branch }}
-      version_cmd: ${{ inputs.version_cmd }}
-    secrets:
-      TOKEN: ${{ secrets.TOKEN || secrets.GITHUB_TOKEN }}
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    outputs:
+      result: ${{ steps.set-version.outputs.result }}
+      version: ${{ steps.set-version.outputs.version }}
+      prerelease: ${{ steps.set-version.outputs.prerelease }}
+      changelog: ${{ steps.set-version.outputs.changelog }}
+    env:
+      GITHUB_TOKEN: ${{ secrets.TOKEN || github.token }}
+      COMMIT_PREFIX: ${{ needs.setup.outputs.commit_prefix }}
+      PR_BRANCH: ${{ needs.setup.outputs.pr_branch }}
+      TARGET_BRANCH: ${{ needs.setup.outputs.target_branch }}
+      VERSION_CMD: ${{ inputs.version_cmd }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # For git-cliff.
+          ref: ${{ env.PR_BRANCH }}
+          token: ${{ env.GITHUB_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+
+      - name: Enable `git push` when `act` is run without `--no-skip-checkout`
+        if: ${{ env.ACT }}
+        run: git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+      - uses: jdx/mise-action@v2
+        with:
+          install_args: 'gh git-cliff'
+        env:
+          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }} # Increase GitHub API rate limits.
+      - run: mise use -g gh git-cliff
+
+      - uses: fregante/setup-git-user@v2
+        env:
+          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+
+      - name: Set git-cliff command
+        run: |
+          if [ -f "cliff.toml" ]; then
+            echo "GIT_CLIFF=git-cliff" >> "$GITHUB_ENV"
+          else
+            echo "GIT_CLIFF=git-cliff --config-url https://github.com/powerman/workflows/blob/main/cliff.toml?raw=true" >> "$GITHUB_ENV"
+          fi
+
+      - name: Update release-pr branch with new version
+        id: set-version
+        env:
+          GITHUB_REPO: ${{ github.repository }} # Used by git-cliff.
+          PR_TITLE: ${{ github.event.pull_request.title }}
+          PR_NUMBER: ${{ github.event.number }}
+        run: |
+          # A manually edited title may differ a bit from auto-generated commit message
+          # (extra spaces, version without "v" prefix).
+          VERSION=$(echo "$PR_TITLE" | grep -oP "^\Q${COMMIT_PREFIX}\E\s+\Kv?[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?" || true)
+          test -n "$VERSION" || {
+            echo "::error::Failed to extract version from PR title: '$PR_TITLE'"
+            echo "::notice::Expected format: '$COMMIT_PREFIX v1.2.3' (version may be without 'v' prefix)"
+            exit 1
+          }
+          VERSION="v${VERSION#v}"
+          PRERELEASE=false
+          if echo "$VERSION" | grep -q '[-]'; then
+            PRERELEASE=true
+          fi
+          COMMIT_MSG="$COMMIT_PREFIX $VERSION"
+          existing_commit_msg=$(git log -1 --pretty=format:"%s")
+
+          # Update release-pr branch and PR if version was manually changed.
+          if [ "$existing_commit_msg" != "$COMMIT_MSG" ]; then
+            # Run custom version command if provided
+            if [ -n "$VERSION_CMD" ]; then
+              echo "::group::Running custom version command"
+              RELEASE_PR_VERSION="$VERSION" \
+                bash -e -o pipefail -c "$VERSION_CMD"
+              echo "::endgroup::"
+            fi
+
+            $GIT_CLIFF --tag "$VERSION" -o CHANGELOG.md
+            git add .
+
+            git commit --amend --allow-empty -m "$COMMIT_MSG"
+            git push origin "$PR_BRANCH" --force
+
+            CHANGELOG=$($GIT_CLIFF --tag "$VERSION" --unreleased --strip all | tail -n +3)
+            gh pr edit "$PR_NUMBER" --title "$COMMIT_MSG" --body "$CHANGELOG"
+            echo "::notice::Updated release-pr branch and PR #$PR_NUMBER with new version"
+          elif [ "$PR_TITLE" != "$COMMIT_MSG" ]; then
+            # Normalize PR title to simplify other workflows.
+            gh pr edit "$PR_NUMBER" --title "$COMMIT_MSG"
+            echo "::notice::Normalized title for release-pr PR #$PR_NUMBER"
+          else
+            echo "::notice::No changes needed for release-pr PR #$PR_NUMBER"
+            exit 0
+          fi
+
+          {
+            echo "result=set-version"
+            echo "version=$VERSION"
+            echo "prerelease=$PRERELEASE"
+            echo "changelog<<EOF"
+            echo "$CHANGELOG"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
 
   release:
     needs: [setup]
     if: ${{ needs.setup.outputs.action == 'release' }}
-    uses: ./.github/workflows/release-pr-release.yml
-    with:
-      commit_prefix: ${{ needs.setup.outputs.commit_prefix }}
-      pr_branch: ${{ needs.setup.outputs.pr_branch }}
-      target_branch: ${{ needs.setup.outputs.target_branch }}
-      version_cmd: ${{ inputs.version_cmd }}
-    secrets:
-      TOKEN: ${{ secrets.TOKEN || secrets.GITHUB_TOKEN }}
+    timeout-minutes: 5
+    runs-on: ubuntu-latest
+    outputs:
+      result: ${{ steps.vars.outputs.result }}
+      version: ${{ steps.vars.outputs.version }}
+      prerelease: ${{ steps.vars.outputs.prerelease }}
+      changelog: ${{ steps.vars.outputs.changelog }}
+    env:
+      GITHUB_TOKEN: ${{ secrets.TOKEN || github.token }}
+      COMMIT_PREFIX: ${{ needs.setup.outputs.commit_prefix }}
+      PR_BRANCH: ${{ needs.setup.outputs.pr_branch }}
+      TARGET_BRANCH: ${{ needs.setup.outputs.target_branch }}
+      VERSION_CMD: ${{ inputs.version_cmd }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # For git-cliff.
+          token: ${{ env.GITHUB_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+
+      - name: Enable `git push` when `act` is run without `--no-skip-checkout`
+        if: ${{ env.ACT }}
+        run: git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
+
+      - uses: jdx/mise-action@v2
+        with:
+          install_args: 'gh git-cliff'
+        env:
+          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }} # Increase GitHub API rate limits.
+      - run: mise use -g gh git-cliff
+
+      - uses: fregante/setup-git-user@v2
+        env:
+          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+
+      - name: Set git-cliff command
+        run: |
+          if [ -f "cliff.toml" ]; then
+            echo "GIT_CLIFF=git-cliff" >> "$GITHUB_ENV"
+          else
+            echo "GIT_CLIFF=git-cliff --config-url https://github.com/powerman/workflows/blob/main/cliff.toml?raw=true" >> "$GITHUB_ENV"
+          fi
+
+      # Race condition handling:
+      # 1. Extract version from PR title (merge commit) or current commit (squash merge).
+      # 2. Regenerate CHANGELOG.md with this version.
+      # 3. If CHANGELOG.md changed, it means one of these race conditions occurred:
+      #    - A user changed version in release PR title and merged release PR before
+      #      set-version job updated release-pr branch.
+      #    - A significant commit was pushed to master branch but user merged release PR before
+      #      prepare-pr job updated release-pr branch.
+      # 4. In case of race condition, create new release PR instead of proceeding with release.
+      - name: Extract version and check race condition
+        env:
+          GITHUB_REPO: ${{ github.repository }} # Used by git-cliff.
+        run: |
+          git checkout -B "$PR_BRANCH"
+
+          # Extract version from PR title for merge commits, otherwise from current commit
+          release_msg=$(git log -1 --pretty=format:"%s")
+          if echo "$release_msg" | grep -q '^Merge pull request #[0-9]\+'; then
+            pr_number=$(echo "$release_msg" | grep -oP '^Merge pull request #\K[0-9]+')
+            release_msg=$(gh pr view "$pr_number" --json title --jq '.title')
+          fi
+          VERSION=$(echo "$release_msg" | grep -oP "^\Q${COMMIT_PREFIX}\E\s+\Kv?[0-9]+\.[0-9]+\.[0-9]+(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?(?:\+[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?" || true)
+          test -n "$VERSION" || {
+            echo "::error::Failed to extract version from release message: '$release_msg'"
+            echo "::notice::Expected format: '$COMMIT_PREFIX v1.2.3' (version may be without 'v' prefix)"
+            exit 1
+          }
+          VERSION="v${VERSION#v}"
+          PRERELEASE=false
+          if echo "$VERSION" | grep -q '[-]'; then
+            PRERELEASE=true
+          fi
+          COMMIT_MSG="$COMMIT_PREFIX $VERSION"
+          CHANGELOG=$($GIT_CLIFF --tag "$VERSION" --unreleased --strip all | tail -n +3)
+          {
+            echo "VERSION=$VERSION"
+            echo "CHANGELOG<<EOF"
+            echo "$CHANGELOG"
+            echo "EOF"
+            echo "PRERELEASE=$PRERELEASE"
+          } >> "$GITHUB_ENV"
+
+          # Check for race condition
+          $GIT_CLIFF --tag "$VERSION" -o CHANGELOG.md
+          if git diff --quiet -- CHANGELOG.md; then
+            echo "::notice::No race condition detected - proceeding with release"
+            exit 0
+          fi
+
+          echo "::warning::Race condition detected - CHANGELOG.md differs from expected state"
+          git diff -- CHANGELOG.md
+
+          # Ensure clean workdir state for $VERSION_CMD.
+          git reset --hard
+
+          # Create release-pr branch and PR due to race condition
+          pr_number=$(gh pr list --state open --head "$PR_BRANCH" --json number --jq '.[0].number')
+          if [ -z "$pr_number" ]; then
+            # Run custom version command if provided
+            if [ -n "$VERSION_CMD" ]; then
+              echo "::group::Running custom version command"
+              RELEASE_PR_VERSION="$VERSION" \
+                bash -e -o pipefail -c "$VERSION_CMD"
+              echo "::endgroup::"
+            fi
+
+            $GIT_CLIFF --tag "$VERSION" -o CHANGELOG.md
+            git add .
+
+            git commit --allow-empty -m "$COMMIT_MSG"
+            git push origin "$PR_BRANCH" --force
+
+            gh pr create --head "$PR_BRANCH" --base "$TARGET_BRANCH" --title "$COMMIT_MSG" --body "$CHANGELOG"
+            echo "::notice::Created new release PR due to race condition"
+          else
+            echo "::notice::Found existing release PR #$pr_number"
+          fi
+
+          exit 1
+
+      - name: Create and push release tag
+        run: |
+          git tag "$VERSION" -m "$CHANGELOG"
+          git push origin "$VERSION"
+
+      - name: Create draft release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.VERSION }}
+          body: ${{ env.CHANGELOG }}
+          draft: true
+          prerelease: ${{ env.PRERELEASE }}
+          token: ${{ env.GITHUB_TOKEN }}
+        env:
+          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
+      - name: Set output
+        id: vars
+        run: |
+          {
+            echo "result=released"
+            echo "version=$VERSION"
+            echo "prerelease=$PRERELEASE"
+            echo "changelog<<EOF"
+            echo "$CHANGELOG"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"

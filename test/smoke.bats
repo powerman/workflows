@@ -29,6 +29,10 @@ EOF
     cp ../cliff.toml .
     git add .
     git commit -m "chore: setup git-cliff"
+
+    cp ../README.md .
+    git add .
+    git commit -m "docs: add README"
 }
 
 setup() {
@@ -63,7 +67,7 @@ event_json() {
         --eventpath "$(event_json push)"
     assert_success
     assert_output --partial "Skip push: target branch is not ${TARGET_BRANCH}"
-    refute_output --partial '::set-output:: action='
+    refute_output --regexp '::set-output:: action=\n'
     refute_output --regexp '::notice::(Created new|Updated existing) release PR'
     refute_output --partial 'Job failed' # We run many workflows, some may output "Job succeeded".
     debug act "release.yml" <<<"$output"
@@ -83,7 +87,7 @@ event_json() {
         --workflows .github/workflows/release.yml \
         --eventpath "$(event_json push)"
     assert_success
-    assert_output --partial '::set-output:: action=prepare'
+    assert_output --partial '::set-output:: action=prepare-pr'
     assert_output --regexp '::notice::(Created new|Updated existing) release PR'
     refute_output --partial 'Job failed' # We run many workflows, some may output 'Job succeeded'.
     debug act "release.yml" <<<"$output"
@@ -177,7 +181,7 @@ event_json() {
     echo "# Created release: $release_name (tag: $tag_name, draft: $is_draft)" >&3
 
     assert_equal "$tag_name" "v1.1.0"
-    assert_equal "$is_draft" "true"
+    assert_equal "$is_draft" "false"
 
     # Verify tag was created
     run git pull
