@@ -5,6 +5,8 @@ on:
     types: [opened, edited, synchronize, reopened]
     branches: [main, master]
 
+permissions: {}
+
 jobs:
   main:
     uses: powerman/.github/workflows/lint-pr-title.yml@main

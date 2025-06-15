@@ -4,6 +4,8 @@ on:
   pull_request:
     branches: [main, master]
 
+permissions: {}
+
 jobs:
   main:
     uses: powerman/.github/workflows/dependency-review.yml@main
