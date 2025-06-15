@@ -8,5 +8,5 @@ permissions: {}
 
 jobs:
   main:
-    uses: powerman/.github/workflows/dependency-review.yml@main
+    uses: powerman/.github/.github/workflows/dependency-review.yml@main
     secrets: inherit

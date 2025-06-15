@@ -9,5 +9,5 @@ permissions: {}
 
 jobs:
   main:
-    uses: powerman/.github/workflows/lint-pr-title.yml@main
+    uses: powerman/.github/.github/workflows/lint-pr-title.yml@main
     secrets: inherit
