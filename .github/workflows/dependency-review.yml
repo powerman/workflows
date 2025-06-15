@@ -2,25 +2,13 @@ name: Dependency review
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, master]
 
-# Ensures review for a previous commit will be completed before reviewing a following commit.
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-
-permissions: {}
+permissions:
+  contents: read
+  pull-requests: write
 
 jobs:
-  dependency-review:
-    runs-on: ubuntu-latest
-    timeout-minutes: 3
-    permissions:
-      contents: read
-      pull-requests: write
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - uses: actions/dependency-review-action@v4
-        with:
-          comment-summary-in-pr: on-failure
+  main:
+    uses: powerman/.github/.github/workflows/dependency-review.yml@main
+    secrets: inherit
