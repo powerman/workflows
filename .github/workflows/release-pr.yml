@@ -96,8 +96,6 @@ jobs:
       - uses: jdx/mise-action@v2
         with:
           install_args: 'gh'
-        env:
-          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }} # Increase GitHub API rate limits.
       - run: mise use -g gh
 
       - name: Route event to suitable workflow
@@ -216,8 +214,6 @@ jobs:
       - uses: jdx/mise-action@v2
         with:
           install_args: 'gh git-cliff'
-        env:
-          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }} # Increase GitHub API rate limits.
       - run: mise use -g gh git-cliff
 
       - uses: fregante/setup-git-user@v2
@@ -347,8 +343,6 @@ jobs:
       - uses: jdx/mise-action@v2
         with:
           install_args: 'gh git-cliff'
-        env:
-          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }} # Increase GitHub API rate limits.
       - run: mise use -g gh git-cliff
 
       - uses: fregante/setup-git-user@v2
@@ -454,8 +448,6 @@ jobs:
       - uses: jdx/mise-action@v2
         with:
           install_args: 'gh git-cliff'
-        env:
-          GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }} # Increase GitHub API rate limits.
       - run: mise use -g gh git-cliff
 
       - uses: fregante/setup-git-user@v2
