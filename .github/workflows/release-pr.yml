@@ -215,6 +215,7 @@ jobs:
         with:
           install_args: 'gh git-cliff'
       - run: mise use -g gh git-cliff
+      - run: git reset --hard # Workaround https://github.com/jdx/mise/discussions/5911.
 
       - uses: fregante/setup-git-user@v2
         env:
@@ -344,6 +345,7 @@ jobs:
         with:
           install_args: 'gh git-cliff'
       - run: mise use -g gh git-cliff
+      - run: git reset --hard # Workaround https://github.com/jdx/mise/discussions/5911.
 
       - uses: fregante/setup-git-user@v2
         env:
@@ -449,6 +451,7 @@ jobs:
         with:
           install_args: 'gh git-cliff'
       - run: mise use -g gh git-cliff
+      - run: git reset --hard # Workaround https://github.com/jdx/mise/discussions/5911.
 
       - uses: fregante/setup-git-user@v2
         env:
