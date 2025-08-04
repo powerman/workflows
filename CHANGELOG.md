@@ -5,6 +5,15 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] - 2025-08-04
+
+### 🐛 Fixed
+
+- **(release-pr)** Work around mise.lock change by @powerman in [b511bdf]
+
+[0.4.2]: https://github.com/powerman/workflows/compare/v0.4.1..v0.4.2
+[b511bdf]: https://github.com/powerman/workflows/commit/b511bdf87b97bd7e1f97a1e8f88838bdd191504e
+
 ## [0.4.1] - 2025-06-15
 
 ### 🐛 Fixed
