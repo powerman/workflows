@@ -142,9 +142,9 @@ jobs:
               echo "::notice::Skip $EVENT_NAME: target branch is not $TARGET_BRANCH"
               exit 0
             fi
-            if echo "$EV_PUSH_HEAD_MESSAGE" | grep -qP "^\Q${COMMIT_PREFIX}\E\s"; then
+            if echo "$EV_PUSH_HEAD_MESSAGE" | head -n 1 | grep -qP "^\Q${COMMIT_PREFIX}\E\s"; then
               pr_merge=true # Squash merge OR Rebase merge.
-            elif echo "$EV_PUSH_HEAD_MESSAGE" | grep -qP "^Merge pull request .* from \Q${PR_BRANCH}\E$"; then
+            elif echo "$EV_PUSH_HEAD_MESSAGE" | head -n 1 | grep -qP "^Merge pull request .* from \Q${PR_BRANCH}\E$"; then
               pr_merge=true # Merge commit.
             fi
             if [ -n "$pr_merge" ]; then
