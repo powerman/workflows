@@ -200,7 +200,7 @@ jobs:
       TARGET_BRANCH: ${{ needs.setup.outputs.target_branch }}
       VERSION_CMD: ${{ inputs.version_cmd }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0 # For git-cliff.
           token: ${{ env.GITHUB_TOKEN }}
@@ -329,7 +329,7 @@ jobs:
       TARGET_BRANCH: ${{ needs.setup.outputs.target_branch }}
       VERSION_CMD: ${{ inputs.version_cmd }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0 # For git-cliff.
           ref: ${{ env.PR_BRANCH }}
@@ -436,7 +436,7 @@ jobs:
       TARGET_BRANCH: ${{ needs.setup.outputs.target_branch }}
       VERSION_CMD: ${{ inputs.version_cmd }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0 # For git-cliff.
           token: ${{ env.GITHUB_TOKEN }}
