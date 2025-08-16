@@ -1,5 +1,9 @@
 # Reusable workflows for GitHub Actions
 
+[![License MIT](https://img.shields.io/badge/license-MIT-royalblue.svg)](LICENSE)
+[![Test](https://img.shields.io/github/actions/workflow/status/powerman/workflows/test.yml?label=test)](https://github.com/powerman/workflows/actions/workflows/test.yml)
+[![Release](https://img.shields.io/github/v/release/powerman/workflows?color=blue)](https://github.com/powerman/workflows/releases/latest)
+
 ## Release PR
 
 Release PR is a tool for simplifying and automating the release process of third-party

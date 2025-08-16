@@ -4,9 +4,11 @@ lockfile = true     # DO NOT FORGET TO `touch mise.lock` if mise.lock does not e
 
 
 [tools]
-#--- Test & Lint
+#--- Lint
 # Static checker for GitHub Actions workflow files.
 actionlint = 'latest'
+
+#--- Test
 # Run your GitHub Actions locally.
 act = 'latest'
 # Bash Automated Testing System.
@@ -24,10 +26,21 @@ description = 'Add commit hash to .cliffignore to exclude from CHANGELOG'
 usage = 'arg "<commit>" help="Git revision (e.g. HEAD or a1b2c4d)"'
 run = 'git rev-parse --verify "${usage_commit}" >> .cliffignore'
 
+[tasks.lint]
+description = 'Run all linters'
+depends = ['lint:*']
+
 [tasks.test]
-alias = 'default'
+description = 'Run all tests'
+depends = ['test:*']
+
+[tasks.default]
 description = 'Run all linters and tests'
-depends = ['lint:*', 'test:*']
+depends = ['lint', 'test']
+
+[tasks.ci]
+description = 'Run all CI tasks'
+depends = ['lint']
 
 [tasks.'lint:workflows']
 description = 'Lint GitHub Action workflows'
@@ -68,7 +81,8 @@ flag "--pr-number <pr-number>" help="PR number"
 flag "--pr-title <pr-title>" help="PR title"
 '''
 env.TEST_REPO = '{{ exec(command="test/test_helper/test_repo") }}'
-dir = '.test-repo'
+dir = '.cache/test-repo'
+depends = 'cachedir'
 run = '''
 event_json=$(mktemp --tmpdir event.XXXXXXXXXX.json) && trap 'rm -f "$event_json"' EXIT
 ../test/test_helper/generate_event $usage_event \
@@ -80,3 +94,7 @@ event_json=$(mktemp --tmpdir event.XXXXXXXXXX.json) && trap 'rm -f "$event_json"
     >"$event_json"
 act "$usage_event" --workflows .github/workflows/release.yml --eventpath "$event_json"
 '''
+
+[tasks.cachedir]
+hide = true
+run = 'mkdir -p .cache'

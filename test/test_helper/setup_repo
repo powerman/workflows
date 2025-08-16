@@ -12,7 +12,7 @@ else
 fi
 
 # Use stable directory for manual testing
-TEST_REPO_DIR="$(git rev-parse --show-toplevel)/.test-repo"
+TEST_REPO_DIR="$(git rev-parse --show-toplevel)/.cache/test-repo"
 rm -rf "$TEST_REPO_DIR"
 mkdir -p "$TEST_REPO_DIR"
 cd "$TEST_REPO_DIR"

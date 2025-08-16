@@ -2,11 +2,10 @@ name: Test
 
 on:
   workflow_dispatch:
-  workflow_call:
   push:
-    branches: ["main"]
+    branches: [main]
   pull_request:
-    branches: ["main"]
+    branches: [main]
 
 # Cancel testing of a previous commit for the same branch.
 concurrency:
@@ -22,8 +21,9 @@ jobs:
     timeout-minutes: 10
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - uses: jdx/mise-action@v2
+      - run: git reset --hard # Work around https://github.com/jdx/mise/discussions/5910.
 
-      - run: mise run lint:workflows
+      - run: mise run ci
