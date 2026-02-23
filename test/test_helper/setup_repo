@@ -24,7 +24,7 @@ git remote add origin "https://github.com/${TEST_REPO}.git"
 
 echo "/.github" >.gitignore
 git add .gitignore
-ln -s ../.github .
+ln -s ../../.github .
 
 git commit -m 'Initial commit'
 git branch -M "$DEFAULT_BRANCH"

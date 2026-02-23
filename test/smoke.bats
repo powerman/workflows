@@ -26,11 +26,11 @@ EOF
     git add .
     git commit -m "feat: add initial version"
 
-    cp ../cliff.toml .
+    cp ../../cliff.toml .
     git add .
     git commit -m "chore: setup git-cliff"
 
-    cp ../README.md .
+    cp ../../README.md .
     git add .
     git commit -m "docs: add README"
 }
