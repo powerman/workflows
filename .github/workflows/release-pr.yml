@@ -93,7 +93,7 @@ jobs:
             echo "target_branch=$TARGET_BRANCH"
           } >> "$GITHUB_OUTPUT"
 
-      - uses: jdx/mise-action@v3
+      - uses: jdx/mise-action@v4
         with:
           install_args: 'gh'
       - run: mise use -g gh
@@ -211,7 +211,7 @@ jobs:
         if: ${{ env.ACT }}
         run: git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
-      - uses: jdx/mise-action@v3
+      - uses: jdx/mise-action@v4
         with:
           install_args: 'gh git-cliff'
       - run: mise use -g gh git-cliff
@@ -341,7 +341,7 @@ jobs:
         if: ${{ env.ACT }}
         run: git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
-      - uses: jdx/mise-action@v3
+      - uses: jdx/mise-action@v4
         with:
           install_args: 'gh git-cliff'
       - run: mise use -g gh git-cliff
@@ -447,7 +447,7 @@ jobs:
         if: ${{ env.ACT }}
         run: git remote set-url origin "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git"
 
-      - uses: jdx/mise-action@v3
+      - uses: jdx/mise-action@v4
         with:
           install_args: 'gh git-cliff'
       - run: mise use -g gh git-cliff
