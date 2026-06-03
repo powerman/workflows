@@ -185,6 +185,14 @@ commit_preprocessors = [
   { pattern = '\((\w+\s)?#([0-9]+)\)', replace = '' },
   # Escape <key> to ensure it won't be processed as <tag>.
   { pattern = '(<[^>]+>)$', replace = '`${1}`' },
+  # Protect already-backticked tokens from double-wrapping.
+  { pattern = '`([^`]*[*_][^`]*)`', replace = '		$1		' },
+  # Wrap words containing * or _ in backticks to avoid prettier escaping.
+  # Commit message headers don't use markdown formatting, so * and _ are
+  # always literal text. Backticks isolate them from prettier's formatter.
+  { pattern = '\S*[*_]\S*', replace = '`$0`' },
+  # Restore protected tokens by removing the double-space markers.
+  { pattern = '		(\S+)		', replace = '$1' },
 ]
 
 # An array of commit parsers for determining the commit groups by using regex. The entire
