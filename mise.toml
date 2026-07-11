@@ -20,6 +20,10 @@ git-cliff = 'latest'
 gh = 'latest'
 
 
+[env]
+GITHUB_TOKEN = '{{exec(command="secret-tool lookup service env name GITHUB_TOKEN")}}'
+
+
 [tasks.'changelog:skip-commit']
 description = 'Add commit hash to .cliffignore to exclude from CHANGELOG'
 usage = 'arg "<commit>" help="Git revision (e.g. HEAD or a1b2c4d)"'

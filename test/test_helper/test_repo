@@ -12,7 +12,7 @@ if [[ -n "$TEST_REPO" ]]; then
     exit 0
 fi
 
-gh_user="$(grep -oP 'user: \K\S*' ~/.config/gh/hosts.yml)" # Faster than `gh api user --jq .login`.
+gh_user="$(gh api user --jq .login)"
 test_repo="${gh_user}/test-$(basename "$(git rev-parse --show-toplevel)")"
 repo="$(git remote get-url origin | grep -oP 'github[.]com.\K[^.]*')"
 
