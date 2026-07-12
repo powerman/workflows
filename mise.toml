@@ -25,7 +25,7 @@ gh = 'latest'
 
 
 [env]
-GITHUB_TOKEN = '{{exec(command="secret-tool lookup service env name GITHUB_TOKEN")}}'
+GITHUB_TOKEN = '{{ exec(command="echo ${GITHUB_TOKEN:-$(secret-tool lookup service env name GITHUB_TOKEN)}") }}'
 
 
 [tasks.'changelog:skip-commit']
