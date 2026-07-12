@@ -22,6 +22,7 @@ jobs:
     secrets:
       TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
+  # Mark release as non-draft and latest.
   finalize:
     needs: [release-pr]
     if: ${{ needs.release-pr.outputs.result == 'released' }}
