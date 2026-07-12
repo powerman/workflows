@@ -105,7 +105,7 @@ env:
 
 jobs:
   release-pr:
-    uses: powerman/workflows/.github/workflows/release-pr.yml@v0.4.4
+    uses: powerman/workflows/.github/workflows/release-pr.yml@v0.4.5
     # with:
     #   target_branch: 'main'                 # Default: repository default branch
     #   pr_branch: 'release-pr'               # Default: 'release-pr'
@@ -189,7 +189,7 @@ Update additional files when the version changes:
 ```yaml
 jobs:
   release-pr:
-    uses: powerman/workflows/.github/workflows/release-pr.yml@v0.4.4
+    uses: powerman/workflows/.github/workflows/release-pr.yml@v0.4.5
     with:
       version_cmd: |
         # Strip 'v' prefix from version and update the version in package files.
@@ -217,7 +217,7 @@ env:
 
 jobs:
   release-pr:
-    uses: powerman/workflows/.github/workflows/release-pr.yml@v0.4.4
+    uses: powerman/workflows/.github/workflows/release-pr.yml@v0.4.5
     secrets:
       TOKEN: ${{ secrets.RELEASE_TOKEN }}
 
