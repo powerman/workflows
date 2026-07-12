@@ -5,6 +5,17 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.5] - 2026-07-12
+
+### 🐛 Fixed
+
+- **(cliff)** Invalid markdown in CHANGELOG by @powerman in [9d56c6b]
+- **(mise)** Use existing `GITHUB_TOKEN` if set by @powerman in [0b51ff1]
+
+[0.4.5]: https://github.com/powerman/workflows/compare/v0.4.4..v0.4.5
+[9d56c6b]: https://github.com/powerman/workflows/commit/9d56c6b84a77eb16b713c2f110234d526a4fd6d6
+[0b51ff1]: https://github.com/powerman/workflows/commit/0b51ff115dc518cb2d8fcf26366e22663c42640f
+
 ## [0.4.4] - 2026-04-07
 
 [0.4.4]: https://github.com/powerman/workflows/compare/v0.4.3..v0.4.4
@@ -65,7 +76,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### 📚 Documentation
 
 - **(README)** Add hints how to manage CHANGELOG.md by @powerman in [#28]
-- Clarify version_cmd environment by @powerman in [#24]
+- Clarify `version_cmd` environment by @powerman in [#24]
 
 [0.3.0]: https://github.com/powerman/workflows/compare/v0.2.0..v0.3.0
 [#22]: https://github.com/powerman/workflows/pull/22
@@ -77,7 +88,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### 🚀 Added
 
-- Add optional RELEASE_TOKEN by @powerman in [#10]
+- Add optional `RELEASE_TOKEN` by @powerman in [#10]
 - Add secrets.TOKEN instead of reusing default token by @powerman in [#11]
 
 ### 🐛 Fixed
