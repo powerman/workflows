@@ -35,14 +35,9 @@ git-cliff = 'latest'
 gh = 'latest'
 
 
-[env]
-GITHUB_TOKEN = '{{ exec(command="echo ${GITHUB_TOKEN:-$(secret-tool lookup service env name GITHUB_TOKEN)}") }}'
-
-
-[tasks.'changelog:skip-commit']
-description = 'Add commit hash to .cliffignore to exclude from CHANGELOG'
-usage = 'arg "<commit>" help="Git revision (e.g. HEAD or a1b2c4d)"'
-run = 'git rev-parse --verify "${usage_commit}" >> .cliffignore'
+[tasks.default]
+description = 'Run all formatters, linters and tests'
+depends = ['fmt', 'lint', 'test']
 
 [tasks.fmt]
 description = 'Format all files'
@@ -55,10 +50,6 @@ depends = ['lint:*']
 [tasks.test]
 description = 'Run all tests'
 depends = ['test:*']
-
-[tasks.default]
-description = 'Run all formatters, linters and tests'
-depends = ['fmt', 'lint', 'test']
 
 [tasks.ci]
 description = 'Run all CI tasks'
@@ -105,6 +96,15 @@ description = 'Check YAML files formatting'
 wait_for = ['fmt:yaml']
 sources = ['**/*.yml', '**/*.yaml']
 run = "git ls-files -z -co --exclude-standard '*.yml' '*.yaml' | xargs -0 -r yamlfmt -lint"
+
+[env]
+GITHUB_TOKEN = '{{ exec(command="echo ${GITHUB_TOKEN:-$(secret-tool lookup service env name GITHUB_TOKEN)}") }}'
+
+
+[tasks.'changelog:skip-commit']
+description = 'Add commit hash to .cliffignore to exclude from CHANGELOG'
+usage = 'arg "<commit>" help="Git revision (e.g. HEAD or a1b2c4d)"'
+run = 'git rev-parse --verify "${usage_commit}" >> .cliffignore'
 
 [tasks.'test:workflows']
 description = 'Run workflow integration tests'
