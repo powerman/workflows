@@ -57,20 +57,11 @@ depends = ['fmt', 'lint']
 # Is working tree clean after fmt?
 run = '! git status --porcelain | tee /dev/stderr | grep -q .'
 
-# A task with unchanged sources is skipped, so sources include configs of its tool
-# and mise.lock (versions of tools).
 [tasks.'fmt:markdown']
 description = 'Format markdown files'
-sources = [
-    '**/*.md',
-    '.prettierrc.yml',
-    '.prettierignore',
-    '.editorconfig',
-    'mise.lock',
-]
+sources = ['**/*.md', '.prettier*', '.editorconfig', 'mise.lock']
 run = 'prettier --write "**/*.md"'
 
-# Taplo doesn't respect .gitignore.
 [tasks.'fmt:toml']
 description = 'Format TOML files'
 sources = ['**/*.toml', 'mise.lock']
@@ -89,13 +80,7 @@ run = 'actionlint'
 [tasks.'lint:markdown']
 description = 'Lint markdown files'
 wait_for = ['fmt:markdown']
-sources = [
-    '**/*.md',
-    '.prettierrc.yml',
-    '.prettierignore',
-    '.editorconfig',
-    'mise.lock',
-]
+sources = ['**/*.md', '.prettier*', '.editorconfig', 'mise.lock']
 run = 'prettier --check "**/*.md"'
 
 [tasks.'lint:toml']
